@@ -1,1 +1,2 @@
 kubernetes==17.17.0
+luigi

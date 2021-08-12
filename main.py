@@ -1,6 +1,9 @@
-import luigi
-
 from kubeluigi import KubernetesJobTask
+
+import logging
+import sys
+logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+
 
 class Task(KubernetesJobTask):
     """
@@ -8,20 +11,28 @@ class Task(KubernetesJobTask):
        az cli, bash, wget, curl..
     Useful when you want to run a bunch of bash cmds in a container
     """
-    container_name = luigi.Parameter("fandango.azurecr.io/opti_utils:")
-    container_tag = luigi.Parameter("development")
+    container_name = "fandango.azurecr.io/opti_utils:"
+    container_tag = "development"
 
     @property
     def limits(self):
         r = {"requests": {
-                    "memory": "200M",
+                    "memory": "116000M",
                     "cpu": "1m"
                 }}
         return r
 
     @property
     def cmd(self):
-        return "echo david"
+        return "echo david555 && sleep 2 && echo after && sleep 5 && echo again"
+
+    @property
+    def namespace(self):
+        return "moussaka"
+
+    @property
+    def labels(self):
+        return {"aadpodidbinding": "fandango-pod-role"}
 
     @property
     def spec_schema(self):
@@ -49,7 +60,8 @@ class Task(KubernetesJobTask):
     def name(self):
         return 'dummytask'
 
-print("init kubernetes..")
-t = Task()
-t._init_kubernetes()
-t.run()
+if __name__ == "__main__":
+    print("init kubernetes..")
+    t = Task()
+    t._init_kubernetes()
+    t.run()
