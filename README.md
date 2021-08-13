@@ -1,9 +1,11 @@
 # Kubeluigi
 
 Kubeluigi is an update on Luigi's default Kubernetes Task.
+- Currently default K8s task on Luigi is outdated, it does not handle some edge cases but most importantly it is not a priority in Luigi, this makes it slow to get changes merged.
 - Kubeluigi uses a non-deprecated kubernetes client library
-- Kubeluigi handle edge error cases not handled by the stdlib Kubernetes Task
+- Kubeluigi handle edge error cases not handled by the stdlib KubernetesTask
 - For most cases with only minor changes you should be able to unplug Luigi's default KubernetesJobTask and use Kubeluigi instead.
+- Please be aware that 
 
 
 ## Example
@@ -12,13 +14,8 @@ Kubeluigi is an update on Luigi's default Kubernetes Task.
 from kubeluigi import KubernetesJobTask
 
 class Task(KubernetesJobTask):
-    """
-    Runs a vanilla ubuntu docker container with minimal utilities:
-       az cli, bash, wget, curl..
-    Useful when you want to run a bunch of bash cmds in a container
-    """
+
     container_name = "ubuntu:18.04"
-    container_tag = "development"
 
     @property
     def limits(self):

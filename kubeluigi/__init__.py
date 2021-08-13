@@ -28,7 +28,7 @@ class KubernetesJobTask:
 
     @property
     def restart_policy(self):
-        return "never"
+        return "Never"
 
     @property
     def delete_on_success(self):

@@ -49,7 +49,7 @@ def kubernetes_client() -> BatchV1Api:
 
 
 def pod_spec_from_dict(
-    name, spec_schema, restartPolicy="never", labels={}
+    name, spec_schema, restartPolicy="Never", labels={}
 ) -> V1PodTemplateSpec:
     """
     returns a pod template spec from a dictionary describing a pod
@@ -61,7 +61,7 @@ def pod_spec_from_dict(
             containers.append(V1Container(**container))
     pod_template = V1PodTemplateSpec(
         metadata=V1ObjectMeta(name=name, labels=labels),
-        spec=V1PodSpec(restart_policy="Never", containers=containers),
+        spec=V1PodSpec(restart_policy=restartPolicy, containers=containers),
     )
     return pod_template
 
