@@ -40,7 +40,7 @@ class FailedJob(Exception):
         super().__init__(self.message)
 
 
-def kubernetes_client():
+def kubernetes_client() -> BatchV1Api:
     """
     returns a kubernetes client
     """
@@ -104,7 +104,7 @@ def job_definition(
     return job
 
 
-def get_pod_log_stream(pod: V1Pod):
+def get_pod_log_stream(pod: V1Pod) -> Generator[x,A,C]:
     """
     returns a stream object looping over the logs of a pod
     """
@@ -153,10 +153,10 @@ class BackgroundJobLogger:
     Logs get printed in background processes.
     """
 
-    def __init__(self, job):
+    def __init__(self, job: V1Job):
         self.job = job
 
-    def _start_processes(self, job: V1Job):
+    def _start_logging(self, job: V1Job):
         pods = get_job_pods(job)
         processes = [Process(target=print_pod_logs, args=(job, pod)) for pod in pods]
         for proc in processes:
@@ -164,7 +164,7 @@ class BackgroundJobLogger:
         return processes
 
     def __enter__(self):
-        self.printing_procs = self._start_processes(self.job)
+        self.printing_procs = self._start_logging(self.job)
 
     def __exit__(self, exception_type, exception, traceback):
         if exception is None:
@@ -175,7 +175,6 @@ class BackgroundJobLogger:
             for p in self.printing_procs:
                 p.kill()
                 p.close()
-
 
 def is_pod_waiting_for_scale_up(condition: V1PodCondition) -> bool:
     """
@@ -193,7 +192,7 @@ def is_pod_waiting_for_scale_up(condition: V1PodCondition) -> bool:
         return False
 
 
-def has_job_started(job) -> bool:
+def has_job_started(job: V1Job) -> bool:
     """
     Checks if a job has started running.
     It checks the status of pods associated to a job.
@@ -239,10 +238,16 @@ def has_job_started(job) -> bool:
     return True
 
 
-def track_job(k8s_client: ApiClient, job: V1Job, real_time_logs=True) -> None:
+def run_and_track_job(k8s_client: ApiClient, job: V1Job) -> None:
     """
     Tracks the execution of a job by following its state changes.
     """
+    logger.info(f"JOB: {job.metadata.name} submitting job")
+    api_response = k8s_client.create_namespaced_job(
+        body=job, namespace=job.metadata.namespace
+    )
+    logger.info(f"JOB: {job.metadata.name} submitted")
+    logger.debug(f"API response job creation: {api_response}")
     job_completed = False
     with BackgroundJobLogger(job):
         while not has_job_started(job):
@@ -270,18 +275,7 @@ def track_job(k8s_client: ApiClient, job: V1Job, real_time_logs=True) -> None:
             sleep(DEFAULT_POLL_INTERVAL)
 
 
-def run_and_track_job(k8s_client: ApiClient, job: V1Job) -> None:
-    """
-    Runs a Job and keeps track of its execution and logs
-    """
-    api_response = k8s_client.create_namespaced_job(
-        body=job, namespace=job.metadata.namespace
-    )
-    logger.debug(f"API response job creation: {api_response}")
-    track_job(k8s_client, job)
-
-
-def clean_job_resources(k8s_client: ApiClient, job: V1Job):
+def clean_job_resources(k8s_client: ApiClient, job: V1Job) -> None:
     """
     delete kubernetes resources associated to a Job
     """
