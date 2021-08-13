@@ -17,7 +17,7 @@ class Task(KubernetesJobTask):
     @property
     def limits(self):
         r = {"requests": {
-                    "memory": "116000M",
+                    "memory": "50M",
                     "cpu": "1m"
                 }}
         return r
