@@ -104,7 +104,7 @@ def job_definition(
     return job
 
 
-def get_pod_log_stream(pod: V1Pod) -> Generator[x,A,C]:
+def get_pod_log_stream(pod: V1Pod) -> Generator[str, None, None]:
     """
     returns a stream object looping over the logs of a pod
     """
