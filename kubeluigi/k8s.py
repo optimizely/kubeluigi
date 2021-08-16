@@ -17,15 +17,11 @@ from kubernetes.client import (
     V1Pod,
     V1PodCondition,
 )
-from kubernetes.client.api import core_v1_api
+from kubernetes.client.api.core_v1_api import CoreV1Api
 from kubernetes.client.api_client import ApiClient
 from kubernetes.client.configuration import Configuration
 from kubernetes.client.exceptions import ApiException
 
-
-# things to do:
-# check for case cluster cant scale, pod cant get scheduled
-#
 
 logger = logging.getLogger("luigi-interface")
 
@@ -70,7 +66,7 @@ def get_job_pods(job: V1Job) -> List[V1Pod]:
     """
     get the pods associated with a kubernetes Job
     """
-    core_v1 = core_v1_api.CoreV1Api()
+    core_v1 = CoreV1Api()
     label_selector = "job-name=" + job.metadata.name
     return core_v1.list_namespaced_pod(
         job.metadata.namespace, label_selector=label_selector
@@ -108,7 +104,7 @@ def get_pod_log_stream(pod: V1Pod) -> Generator[str, None, None]:
     """
     returns a stream object looping over the logs of a pod
     """
-    core_v1 = core_v1_api.CoreV1Api()
+    core_v1 = corev1_client()
     watcher = watch.Watch()
     stream = watcher.stream(
         core_v1.read_namespaced_pod_log,
@@ -118,28 +114,37 @@ def get_pod_log_stream(pod: V1Pod) -> Generator[str, None, None]:
     return stream
 
 
+def is_pod_running(pod: V1PodSpec):
+    client = corev1_client()
+    r = client.read_namespaced_pod(
+        name=pod.metadata.name, namespace=pod.metadata.namespace
+    )
+    pod_is_running = r.status.phase != "Pending"
+    return pod_is_running
+
+
+def corev1_client():
+    config.load_kube_config()
+    core_v1 = CoreV1Api()
+    return core_v1
+
+
 def print_pod_logs(job: V1Job, pod: V1PodSpec):
     """
     prints in realtime the logs of a running POD
     """
-    pod_is_running = False
-    config.load_kube_config()
-    core_v1 = core_v1_api.CoreV1Api()
     logs_prefix = "JOB: " + job.metadata.name + " POD: " + pod.metadata.name
     while True:
         logger.info(logs_prefix + " ...waiting for POD to start")
         sleep(DEFAULT_POLL_INTERVAL)
         try:
-            r = core_v1.read_namespaced_pod(
-                name=pod.metadata.name, namespace=pod.metadata.namespace
-            )
-            pod_is_running = r.status.phase != "Pending"
-            if pod_is_running:
-                logger.info(logs_prefix + " POD is in Phase: " + r.status.phase)
+            if is_pod_running(pod):
+                logger.info(logs_prefix + " POD is running")
                 break
         except ApiException as e:
             logger.warning("error while fetching pod logs :" + logs_prefix)
             logger.exception(e)
+            raise e
 
     stream = get_pod_log_stream(pod)
     for i in stream:
@@ -175,6 +180,7 @@ class BackgroundJobLogger:
             for p in self.printing_procs:
                 p.kill()
                 p.close()
+
 
 def is_pod_waiting_for_scale_up(condition: V1PodCondition) -> bool:
     """
@@ -238,6 +244,32 @@ def has_job_started(job: V1Job) -> bool:
     return True
 
 
+def is_job_completed(k8s_client: ApiClient, job: V1Job):
+    """
+    returns true if a job is completed
+    returns false if a job is still running
+    raises an exception if job reaches a failed state
+    """
+    api_response = k8s_client.read_namespaced_job_status(
+        name=job.metadata.name, namespace=job.metadata.namespace
+    )
+    has_succeded = api_response.status.succeeded is not None
+    has_failed = api_response.status.failed is not None
+    if has_succeded or has_failed:
+        if has_succeded:
+            logger.info("JOB: " + job.metadata.name + " has succeded")
+            return True
+
+        if has_failed:
+            logger.warning("JOB: " + job.metadata.name + " has failed")
+            raise FailedJob(
+                job,
+                job_status=api_response,
+                message=f"Job {job.metadata.name} has failed",
+            )
+    return False
+
+
 def run_and_track_job(k8s_client: ApiClient, job: V1Job) -> None:
     """
     Tracks the execution of a job by following its state changes.
@@ -255,23 +287,7 @@ def run_and_track_job(k8s_client: ApiClient, job: V1Job) -> None:
             logger.info("Waiting for Kubernetes job " + job.metadata.name + " to start")
 
         while not job_completed:
-            api_response = k8s_client.read_namespaced_job_status(
-                name=job.metadata.name, namespace=job.metadata.namespace
-            )
-            has_succeded = api_response.status.succeeded is not None
-            has_failed = api_response.status.failed is not None
-            if has_succeded or has_failed:
-                job_completed = True
-                if has_succeded:
-                    logger.info("JOB: " + job.metadata.name + " has succeded")
-
-                if has_failed:
-                    logger.warning("JOB: " + job.metadata.name + " has failed")
-                    raise FailedJob(
-                        job,
-                        job_status=api_response,
-                        message=f"Job {job.metadata.name} has failed",
-                    )
+            job_completed = is_job_completed(k8s_client, job)
             sleep(DEFAULT_POLL_INTERVAL)
 
 
