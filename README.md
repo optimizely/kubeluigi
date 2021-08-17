@@ -65,3 +65,14 @@ class Task(KubernetesJobTask):
 
 ```
 
+## Development
+
+- local setup: 
+
+```bash
+# install local package
+pip install -e .
+
+# testing
+python setup.py test
+```
