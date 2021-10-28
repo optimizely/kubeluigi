@@ -1,0 +1,17 @@
+name: run_tests
+on: [push, pull_request]
+jobs:
+  make-tests:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: Set up Python 3.7
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.7
+    - name: Preparing environment
+      run: |
+        pip install setuptools
+    - name: Run tests
+      run: |
+        python setup.py test
