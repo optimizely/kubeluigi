@@ -1,5 +1,5 @@
-from kubeluigi import KubernetesJobTask
 from kubeluigi.k8s import (
+    has_scaling_failed,
     pod_spec_from_dict,
     job_definition,
     print_pod_logs,
@@ -9,6 +9,7 @@ from kubeluigi.k8s import (
     run_and_track_job,
     BackgroundJobLogger,
 )
+
 from kubernetes.client import V1Pod, V1PodCondition
 
 from mock import patch, MagicMock
@@ -113,6 +114,29 @@ def test_is_pod_waiting_for_scale_up():
         message="..", reason="..", status="something", type="something"
     )
     assert not is_pod_waiting_for_scale_up(non_scaling_condition)
+
+    non_scaling_condition = V1PodCondition(
+        message="Unschedulable", reason="..", status="something", type="something"
+    )
+    assert not is_pod_waiting_for_scale_up(non_scaling_condition)
+
+    
+def test_has_scaling_failed():
+    condition = V1PodCondition(
+        message="pod didn't trigger scale-up (it wouldn't fit if a new node is added)",
+        reason="Unschedulable",
+        status="something",
+        type="something",
+    )
+    assert has_scaling_failed(condition)
+    condition = V1PodCondition(
+        message="0/3 nodes are available",
+        reason="Unschedulable",
+        status="something",
+        type="something",
+    )
+    assert not has_scaling_failed(condition)
+    
 
 
 @patch("kubeluigi.k8s.get_job_pods")

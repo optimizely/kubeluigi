@@ -197,6 +197,13 @@ def is_pod_waiting_for_scale_up(condition: V1PodCondition) -> bool:
             return True
         return False
 
+    
+def has_scaling_failed(condition: V1PodCondition) -> bool:
+    if "Unschedulable" in condition.reason and \
+       condition.message and "pod didn't trigger scale-up (it wouldn" in condition.message:
+        return True
+    return False
+
 
 def has_job_started(job: V1Job) -> bool:
     """
@@ -238,6 +245,12 @@ def has_job_started(job: V1Job) -> bool:
                     return False
                 if cond.reason == "Unschedulable":
                     if is_pod_waiting_for_scale_up(cond):
+                        if has_scaling_failed(cond):
+                            logger.info(f"{logs_prefix} Cluster could not scale up.")
+                            raise FailedJob(
+                                job=job,
+                                message=f"Job: {job.metadata.name} - Pod: {pod.name} container has a  weird condition : {cond.reason}  {cond.message}",
+                            )
                         logger.info(f"{logs_prefix} Waiting for cluster to Scale up..")
                         return False
 
