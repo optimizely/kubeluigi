@@ -2,16 +2,21 @@ name: run_tests
 on: [push, pull_request]
 jobs:
   make-tests:
-    runs-on: ubuntu-latest
+    name: Test ${{ matrix.os }}, ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        python-version: [3.7, 3.8]
+        platform: [x64]
     steps:
-    - uses: actions/checkout@v1
-    - name: Set up Python 3.7
-      uses: actions/setup-python@v2
+    - uses: actions/checkout@v2
+    - uses: actions/setup-python@v2
       with:
-        python-version: 3.7
+          python-version: ${{ matrix.python-version }}
     - name: Preparing environment
       run: |
-        pip install setuptools
+        pip install setuptools nox
     - name: Run tests
       run: |
-        python setup.py test
+        nox --python=${{ matrix.python-version }}

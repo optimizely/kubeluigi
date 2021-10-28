@@ -93,11 +93,10 @@ INFO:luigi-interface:JOB: dummytask-20211028031913-a5eb1d7e634b43c8 POD: dummyta
 
 - local setup: 
 
-```bash
-# install local package
-pip install -e .
+- install local package
+`pip install -e .`
 
 # testing
-python setup.py test
-```
+`pip install nox`
+`nox`
 

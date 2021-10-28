@@ -14,7 +14,7 @@ class PyTest(TestCommand):
         sys.exit(pytest.main(self.test_args))
 
 
-version = '1.0.1'
+version = '0.0.1'
 
 setup(name='kubeluigi',
       version=version,
@@ -37,7 +37,6 @@ setup(name='kubeluigi',
       author_email='david.przybilla@optimizely.com',
       license='Apache License 2.0',
       packages=find_packages(exclude=['tests']),
-      tests_require=['pytest', 'mock'],
       cmdclass={'test': PyTest},
       install_requires=['kubernetes>=17.17.0', 'luigi'],
       entry_points={}
