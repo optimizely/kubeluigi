@@ -11,6 +11,9 @@ Improvements over default luigi's contrib:
 - Realtime logging from Kubernetes Tasks
 - Logsfrom Kubernetes Tasks include a prefix which makes it easier to track the association of Job, Task, and Pod.
 
+## Installation
+`pip install kubeluigi`
+
 
 ## Moving from Luigi's default contrib
 
@@ -23,7 +26,7 @@ Just replace your imports of `KubernetesJobTask`:
 
 
 
-## Full Kubeluigi Example
+## Example
 
 ```python
 from kubeluigi import KubernetesJobTask
