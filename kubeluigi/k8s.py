@@ -40,7 +40,7 @@ def kubernetes_client() -> BatchV1Api:
     """
     returns a kubernetes client
     """
-    config.load_kube_config()
+    config.load_config()
     return BatchV1Api()
 
 
