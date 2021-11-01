@@ -14,28 +14,29 @@ class PyTest(TestCommand):
         sys.exit(pytest.main(self.test_args))
 
 
-version = '1.0.0'
+version = '1.0.1'
 
 setup(name='kubeluigi',
       version=version,
+      url='https://github.com/optimizely/kubeluigi',
       description="Luigi contribution to run Tasks as Kubernetes Jobs",
       long_description=open("README.md").read(),
+      long_description_content_type="text/markdown",
       classifiers=[
         'Development Status :: 4 - Beta',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python',
         'Intended Audience :: Developers',
-        'License :: OSI Approved :: MIT License',
+        'License :: OSI Approved :: Apache Software License',
         'Topic :: Software Development',
         'Environment :: Plugins',
       ],
       keywords='Kubeluigi Kubernetes luigi pipelines pipeline kubetask',
       author='Optimizely Datascience',
       author_email='david.przybilla@optimizely.com',
-      license='MIT',
+      license='Apache License 2.0',
       packages=find_packages(exclude=['tests']),
-      tests_require=['pytest', 'mock'],
       cmdclass={'test': PyTest},
       install_requires=['kubernetes>=17.17.0', 'luigi'],
       entry_points={}
