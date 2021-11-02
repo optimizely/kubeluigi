@@ -8,6 +8,7 @@ from kubeluigi.k8s import (
     FailedJob,
     run_and_track_job,
     BackgroundJobLogger,
+    load_config
 )
 
 from kubernetes.client import V1Pod, V1PodCondition
@@ -225,3 +226,17 @@ def test_run_and_track_job_failure(mocked_has_job_started, mocked_is_job_complet
         with patch.object(BackgroundJobLogger, "__exit__", return_value=None) as m2:
             with pytest.raises(FailedJob):
                 run_and_track_job(client, job)
+
+                
+@patch("kubeluigi.k8s.config")
+def test_load_config_locally(mocked_k8s_config):
+    load_config()
+    assert mocked_k8s_config.load_kube_config.called
+    assert not mocked_k8s_config.load_incluster_config.called
+
+
+@patch("kubeluigi.k8s.config")
+def test_load_config_in_pod(mocked_k8s_config):
+    mocked_k8s_config.load_kube_config.side_effect = Exception("error")
+    load_config()
+    assert mocked_k8s_config.load_incluster_config.called

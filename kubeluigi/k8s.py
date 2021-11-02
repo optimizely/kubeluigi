@@ -36,11 +36,19 @@ class FailedJob(Exception):
         super().__init__(self.message)
 
 
+def load_config():
+    try:
+        config.load_kube_config()
+    except Exception:
+        # when running inside a pod
+        config.load_incluster_config()
+
+        
 def kubernetes_client() -> BatchV1Api:
     """
     returns a kubernetes client
     """
-    config.load_kube_config()
+    load_config()
     return BatchV1Api()
 
 
@@ -124,7 +132,7 @@ def is_pod_running(pod: V1PodSpec):
 
 
 def corev1_client():
-    config.load_kube_config()
+    load_config()
     core_v1 = CoreV1Api()
     return core_v1
 
