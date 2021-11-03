@@ -16,6 +16,8 @@ from kubernetes.client import (
     V1DeleteOptions,
     V1Pod,
     V1PodCondition,
+    V1Volume,
+    V1VolumeMount
 )
 from kubernetes.client.api.core_v1_api import CoreV1Api
 from kubernetes.client.api_client import ApiClient
@@ -54,12 +56,28 @@ def pod_spec_from_dict(
     for container in spec_schema["containers"]:
         if "imagePullPolicy" in container:
             container["image_pull_policy"] = container.pop("imagePullPolicy")
+        if  container['volume_mounts']:
+            container = add_mount_volumes(container)
             containers.append(V1Container(**container))
     pod_template = V1PodTemplateSpec(
         metadata=V1ObjectMeta(name=name, labels=labels),
         spec=V1PodSpec(restart_policy=restartPolicy, containers=containers),
     )
     return pod_template
+
+
+def add_mount_volumes(container):
+    """
+    Returns a container with V1VolumeMount objects from the spec schema of a container
+    """
+    volumes = container['mount_volumes']
+    mount_volumes = []
+    for volume in volumes:
+        mount_path = volume['mountPath']
+        name = volume['name']
+        mount_volumes.append(V1VolumeMount(mount_path=mount_path, name=name))
+    container['mount_volumes'] = mount_volumes
+    return container
 
 
 def get_job_pods(job: V1Job) -> List[V1Pod]:
