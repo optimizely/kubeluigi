@@ -58,10 +58,10 @@ def pod_spec_from_dict(
     for container in spec_schema["containers"]:
         if "imagePullPolicy" in container:
             container["image_pull_policy"] = container.pop("imagePullPolicy")
-        if  container['volume_mounts']:
+        if "volume_mounts" in container and container['volume_mounts']:
             container, container_volumes = get_container_and_volumes(container)
             volumes.append(container_volumes)
-            containers.append(V1Container(**container))
+        containers.append(V1Container(**container))
     pod_template = V1PodTemplateSpec(
         metadata=V1ObjectMeta(name=name, labels=labels),
         spec=V1PodSpec(restart_policy=restartPolicy, containers=containers, volumes=volumes),
