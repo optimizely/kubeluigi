@@ -54,33 +54,36 @@ def pod_spec_from_dict(
     returns a pod template spec from a dictionary describing a pod
     """
     containers = []
+    volumes = []
     for container in spec_schema["containers"]:
         if "imagePullPolicy" in container:
             container["image_pull_policy"] = container.pop("imagePullPolicy")
         if  container['volume_mounts']:
-            container = add_mount_volumes(container)
+            container, container_volumes = get_container_and_volumes(container)
+            volumes.append(container_volumes)
             containers.append(V1Container(**container))
     pod_template = V1PodTemplateSpec(
         metadata=V1ObjectMeta(name=name, labels=labels),
-        spec=V1PodSpec(restart_policy=restartPolicy, containers=containers),
+        spec=V1PodSpec(restart_policy=restartPolicy, containers=containers, volumes=volumes),
     )
     return pod_template
 
 
-def add_mount_volumes(container):
+def get_container_and_volumes(container):
     """
     Returns a container with V1VolumeMount objects from the spec schema of a container
+    and a list of V1volume objects
     """
     volumes_spec = container['volume_mounts']
     mount_volumes = []
-    volumes=[]
+    volumes = []
     for volume in volumes_spec:
         mount_path = volume['mountPath']
         name = volume['name']
         mount_volumes.append(V1VolumeMount(mount_path=mount_path, name=name))
-        volumes.append(V1Volume(name=name,host_path=V1HostPathVolumeSource(path='/mnt')))
+        volumes.append(V1Volume(name=name, host_path='/mnt'))
     container['volume_mounts'] = mount_volumes
-    return container
+    return container, volumes
 
 
 def get_job_pods(job: V1Job) -> List[V1Pod]:
