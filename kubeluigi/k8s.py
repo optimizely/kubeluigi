@@ -17,7 +17,8 @@ from kubernetes.client import (
     V1Pod,
     V1PodCondition,
     V1Volume,
-    V1VolumeMount
+    V1VolumeMount,
+    V1HostPathVolumeSource
 )
 from kubernetes.client.api.core_v1_api import CoreV1Api
 from kubernetes.client.api_client import ApiClient
@@ -70,13 +71,15 @@ def add_mount_volumes(container):
     """
     Returns a container with V1VolumeMount objects from the spec schema of a container
     """
-    volumes = container['mount_volumes']
+    volumes_spec = container['volume_mounts']
     mount_volumes = []
-    for volume in volumes:
+    volumes=[]
+    for volume in volumes_spec:
         mount_path = volume['mountPath']
         name = volume['name']
         mount_volumes.append(V1VolumeMount(mount_path=mount_path, name=name))
-    container['mount_volumes'] = mount_volumes
+        volumes.append(V1Volume(name=name,host_path=V1HostPathVolumeSource(path='/mnt')))
+    container['volume_mounts'] = mount_volumes
     return container
 
 
