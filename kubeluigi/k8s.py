@@ -81,7 +81,7 @@ def get_container_and_volumes(container):
         mount_path = volume['mountPath']
         name = volume['name']
         mount_volumes.append(V1VolumeMount(mount_path=mount_path, name=name))
-        volumes.append(V1Volume(name=name, host_path='/mnt'))
+        volumes.append(V1Volume(name=name, host_path=V1HostPathVolumeSource(path='/mnt')))
     container['volume_mounts'] = mount_volumes
     return container, volumes
 
