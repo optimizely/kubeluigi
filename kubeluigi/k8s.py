@@ -124,7 +124,7 @@ def is_pod_running(pod: V1PodSpec):
 
 
 def corev1_client():
-    config.load_kube_config()
+    config.load_config()
     core_v1 = CoreV1Api()
     return core_v1
 
