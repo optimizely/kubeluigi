@@ -55,12 +55,40 @@ dummy_pod_spec_with_volume = {
             "args": ["my_arg"],
             "imagePullPolicy": "Always",
             "env": [{"name": "my_env", "value": "env"}],
-            "volume_mounts":[
+            "volume_mounts": [
                 {"name": "Vname", "mountPath": "VmountPath", "host_path": "VhostPath"}
-            ]
+            ],
         }
-    ]
+    ],
+    "volumes": [
+        {
+            "name": "volname",
+            "csi": {
+                "driver": "blob.csi.azure.com",
+                "volumeAttributes": {
+                    "containerName": "volcontainername",
+                    "secretName": "volsecret",
+                    "mountOptions": "-o allow_other --file-cache-timeout-in-seconds=120",
+                },
+            },
+        }
+    ],
 }
+
+# dummy_pod_spec_with_volume = {
+#     "containers": [
+#         {
+#             "name": "container_name",
+#             "image": "my_image",
+#             "args": ["my_arg"],
+#             "imagePullPolicy": "Always",
+#             "env": [{"name": "my_env", "value": "env"}],
+#             "volume_mounts":[
+#                 {"name": "Vname", "mountPath": "VmountPath", "host_path": "VhostPath"}
+#             ]
+#         }
+#     ]
+# }
 
 def test_pod_spec_with_volume_from_dict():
 
@@ -70,10 +98,13 @@ def test_pod_spec_with_volume_from_dict():
     assert pod_spec.metadata.name == "name_of_pod"
     assert pod_spec.metadata.labels == labels
     assert pod_spec.spec.restart_policy == "Never"
+    assert pod_spec.spec.volumes == [
+        V1Volume(**dummy_pod_spec_with_volume['volumes'][0])
+    ]
     container = pod_spec.spec.containers[0]
-    assert container.name == dummy_pod_spec["containers"][0]["name"]
-    assert container.image == dummy_pod_spec["containers"][0]["image"]
-    assert container.env == dummy_pod_spec["containers"][0]["env"]
+    assert container.name == dummy_pod_spec_with_volume["containers"][0]["name"]
+    assert container.image == dummy_pod_spec_with_volume["containers"][0]["image"]
+    assert container.env == dummy_pod_spec_with_volume["containers"][0]["env"]
     assert container.volume_mounts == [V1VolumeMount(mount_path="VmountPath", name="Vname")]
 
 
