@@ -1,3 +1,6 @@
+from kubernetes.client.models.v1_host_path_volume_source import V1HostPathVolumeSource
+from kubernetes.client.models.v1_volume import V1Volume
+from kubernetes.client.models.v1_volume_mount import V1VolumeMount
 from kubeluigi.k8s import (
     has_scaling_failed,
     pod_spec_from_dict,
@@ -8,12 +11,14 @@ from kubeluigi.k8s import (
     FailedJob,
     run_and_track_job,
     BackgroundJobLogger,
+    get_container_and_volumes
 )
 
 from kubernetes.client import V1Pod, V1PodCondition
 
 from mock import patch, MagicMock
 import pytest
+
 
 dummy_pod_spec = {
     "containers": [
@@ -40,6 +45,54 @@ def test_pod_spec_from_dict():
     assert container.name == dummy_pod_spec["containers"][0]["name"]
     assert container.image == dummy_pod_spec["containers"][0]["image"]
     assert container.env == dummy_pod_spec["containers"][0]["env"]
+
+
+dummy_pod_spec_with_volume = {
+    "containers": [
+        {
+            "name": "container_name",
+            "image": "my_image",
+            "args": ["my_arg"],
+            "imagePullPolicy": "Always",
+            "env": [{"name": "my_env", "value": "env"}],
+            "volume_mounts":[
+                {"name": "Vname", "mountPath": "VmountPath", "host_path": "VhostPath"}
+            ]
+        }
+    ]
+}
+
+def test_pod_spec_with_volume_from_dict():
+
+    labels = {"l1": "label1"}
+    pod_spec = pod_spec_from_dict("name_of_pod", dummy_pod_spec_with_volume, labels=labels)
+
+    assert pod_spec.metadata.name == "name_of_pod"
+    assert pod_spec.metadata.labels == labels
+    assert pod_spec.spec.restart_policy == "Never"
+    container = pod_spec.spec.containers[0]
+    assert container.name == dummy_pod_spec["containers"][0]["name"]
+    assert container.image == dummy_pod_spec["containers"][0]["image"]
+    assert container.env == dummy_pod_spec["containers"][0]["env"]
+    assert container.volume_mounts == [V1VolumeMount(mount_path="VmountPath", name="Vname")]
+
+
+
+dummy_container = {
+            "name": "container_name",
+            "image": "my_image",
+            "args": ["my_arg"],
+            "imagePullPolicy": "Always",
+            "env": [{"name": "my_env", "value": "env"}],
+            "volume_mounts":[
+                {"name": "Vname", "mountPath": "VmountPath", "host_path": "VhostPath"}
+            ]
+        }
+
+def test_get_containers_and_volumes():
+    container, volumes = get_container_and_volumes(dummy_container)
+    assert container['volume_mounts'] == [V1VolumeMount(mount_path="VmountPath", name="Vname")]
+    assert volumes == [V1Volume(name='Vname', host_path=V1HostPathVolumeSource(path='VhostPath'))]
 
 
 def test_job_definition():

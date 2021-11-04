@@ -80,8 +80,9 @@ def get_container_and_volumes(container):
     for volume in volumes_spec:
         mount_path = volume['mountPath']
         name = volume['name']
+        host_path = volume['host_path']
         mount_volumes.append(V1VolumeMount(mount_path=mount_path, name=name))
-        volumes.append(V1Volume(name=name, host_path=V1HostPathVolumeSource(path='/mnt')))
+        volumes.append(V1Volume(name=name, host_path=V1HostPathVolumeSource(path=host_path)))
     container['volume_mounts'] = mount_volumes
     return container, volumes
 
