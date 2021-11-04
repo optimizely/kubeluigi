@@ -11,7 +11,7 @@ from kubeluigi.k8s import (
     FailedJob,
     run_and_track_job,
     BackgroundJobLogger,
-    get_container_and_volumes
+    get_container_with_volume_mounts
 )
 
 from kubernetes.client import V1Pod, V1PodCondition
@@ -75,20 +75,6 @@ dummy_pod_spec_with_volume = {
     ],
 }
 
-# dummy_pod_spec_with_volume = {
-#     "containers": [
-#         {
-#             "name": "container_name",
-#             "image": "my_image",
-#             "args": ["my_arg"],
-#             "imagePullPolicy": "Always",
-#             "env": [{"name": "my_env", "value": "env"}],
-#             "volume_mounts":[
-#                 {"name": "Vname", "mountPath": "VmountPath", "host_path": "VhostPath"}
-#             ]
-#         }
-#     ]
-# }
 
 def test_pod_spec_with_volume_from_dict():
 
@@ -108,7 +94,6 @@ def test_pod_spec_with_volume_from_dict():
     assert container.volume_mounts == [V1VolumeMount(mount_path="VmountPath", name="Vname")]
 
 
-
 dummy_container = {
             "name": "container_name",
             "image": "my_image",
@@ -120,10 +105,9 @@ dummy_container = {
             ]
         }
 
-def test_get_containers_and_volumes():
-    container, volumes = get_container_and_volumes(dummy_container)
+def test_get_container_with_volume_mounts():
+    container = get_container_with_volume_mounts(dummy_container)
     assert container['volume_mounts'] == [V1VolumeMount(mount_path="VmountPath", name="Vname")]
-    assert volumes == [V1Volume(name='Vname', host_path=V1HostPathVolumeSource(path='VhostPath'))]
 
 
 def test_job_definition():
