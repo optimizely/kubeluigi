@@ -16,6 +16,9 @@ from kubernetes.client import (
     V1DeleteOptions,
     V1Pod,
     V1PodCondition,
+    V1Volume,
+    V1VolumeMount,
+    V1HostPathVolumeSource
 )
 from kubernetes.client.api.core_v1_api import CoreV1Api
 from kubernetes.client.api_client import ApiClient
@@ -40,7 +43,7 @@ def kubernetes_client() -> BatchV1Api:
     """
     returns a kubernetes client
     """
-    config.load_kube_config()
+    config.load_config()
     return BatchV1Api()
 
 
@@ -51,15 +54,37 @@ def pod_spec_from_dict(
     returns a pod template spec from a dictionary describing a pod
     """
     containers = []
+    volumes = []
     for container in spec_schema["containers"]:
         if "imagePullPolicy" in container:
             container["image_pull_policy"] = container.pop("imagePullPolicy")
-            containers.append(V1Container(**container))
+        if "volume_mounts" in container and container['volume_mounts']:
+            container, container_volumes = get_container_and_volumes(container)
+            volumes.append(container_volumes)
+        containers.append(V1Container(**container))
     pod_template = V1PodTemplateSpec(
         metadata=V1ObjectMeta(name=name, labels=labels),
-        spec=V1PodSpec(restart_policy=restartPolicy, containers=containers),
+        spec=V1PodSpec(restart_policy=restartPolicy, containers=containers, volumes=volumes),
     )
     return pod_template
+
+
+def get_container_and_volumes(container):
+    """
+    Returns a container with V1VolumeMount objects from the spec schema of a container
+    and a list of V1volume objects
+    """
+    volumes_spec = container['volume_mounts']
+    mount_volumes = []
+    volumes = []
+    for volume in volumes_spec:
+        mount_path = volume['mountPath']
+        name = volume['name']
+        host_path = volume['host_path']
+        mount_volumes.append(V1VolumeMount(mount_path=mount_path, name=name))
+        volumes.append(V1Volume(name=name, host_path=V1HostPathVolumeSource(path=host_path)))
+    container['volume_mounts'] = mount_volumes
+    return container, volumes
 
 
 def get_job_pods(job: V1Job) -> List[V1Pod]:
@@ -124,7 +149,7 @@ def is_pod_running(pod: V1PodSpec):
 
 
 def corev1_client():
-    config.load_kube_config()
+    config.load_config()
     core_v1 = CoreV1Api()
     return core_v1
 
