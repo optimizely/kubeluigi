@@ -254,13 +254,13 @@ def has_job_started(job: V1Job) -> bool:
                 if status.state.terminated:
                     raise FailedJob(
                         job=job,
-                        message=f"Job: {job.metadata.name} - Pod: {pod.name} container has a  weird status : {status}",
+                        message=f"Job: {job.metadata.name} - Pod: {pod.metadata.name} container has a  weird status : {status}",
                     )
                 if status.state.waiting:
                     if status.state.waiting.reason != "ContainerCreating":
                         raise FailedJob(
                             job=job,
-                            message=f"Job: {job.metadata.name} - Pod: {pod.name} container has a  weird status : {status}",
+                            message=f"Job: {job.metadata.name} - Pod: {pod.metadata.name} container has a  weird status : {status}",
                         )
         if pod.status.conditions:
             for cond in pod.status.conditions:
@@ -273,7 +273,7 @@ def has_job_started(job: V1Job) -> bool:
                             logger.info(f"{logs_prefix} Cluster could not scale up.")
                             raise FailedJob(
                                 job=job,
-                                message=f"Job: {job.metadata.name} - Pod: {pod.name} Failed to scale up : {cond.reason}  {cond.message}",
+                                message=f"Job: {job.metadata.name} - Pod: {pod.metadata.name} Failed to scale up : {cond.reason}  {cond.message}",
                             )
                         logger.info(f"{logs_prefix} Waiting for cluster to Scale up..")
                         return False
