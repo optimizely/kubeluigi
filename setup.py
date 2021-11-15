@@ -14,7 +14,7 @@ class PyTest(TestCommand):
         sys.exit(pytest.main(self.test_args))
 
 
-version = '1.0.2'
+version = '1.0.3'
 
 setup(name='kubeluigi',
       version=version,
