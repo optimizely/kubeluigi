@@ -28,7 +28,7 @@ from kubernetes.client.exceptions import ApiException
 
 logger = logging.getLogger("luigi-interface")
 
-DEFAULT_POLL_INTERVAL = 5
+DEFAULT_POLL_INTERVAL = 2
 
 
 class FailedJob(Exception):
@@ -203,7 +203,6 @@ class BackgroundJobLogger:
         if exception is not None:
             for p in self.printing_procs:
                 p.kill()
-                p.close()
 
 
 def is_pod_waiting_for_scale_up(condition: V1PodCondition) -> bool:
@@ -251,11 +250,6 @@ def has_job_started(job: V1Job) -> bool:
         if pod.status.container_statuses:
             for status in pod.status.container_statuses:
                 logger.info(f"{logs_prefix} container status {status}")
-                if status.state.terminated:
-                    raise FailedJob(
-                        job=job,
-                        message=f"Job: {job.metadata.name} - Pod: {pod.metadata.name} container has a  weird status : {status}",
-                    )
                 if status.state.waiting:
                     if status.state.waiting.reason != "ContainerCreating":
                         raise FailedJob(
@@ -317,6 +311,9 @@ def run_and_track_job(k8s_client: ApiClient, job: V1Job) -> None:
     )
     logger.info(f"JOB: {job.metadata.name} submitted")
     logger.debug(f"API response job creation: {api_response}")
+    logger.info("---Job Definition----")
+    logger.info(job)
+    logger.info("---End of Job Definition")
     job_completed = False
     with BackgroundJobLogger(job):
         while not has_job_started(job):
