@@ -15,6 +15,7 @@ logger = logging.getLogger("luigi-interface")
 
 
 class KubernetesJobTask:
+    
     def _init_kubernetes(self):
         self.__logger = logger
         self.kubernetes_client = kubernetes_client()
