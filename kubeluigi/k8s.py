@@ -261,7 +261,7 @@ def has_job_started(job: V1Job) -> bool:
                     if status.state.terminated.reason == 'Error':
                         raise FailedJob(
                             job=job,
-                            message=f"Job: {job.metadata.name} - Pod: {pod.metadata.name} container has run with an error : {status}",
+                            message=f"Job: {job.metadata.name} - Pod: {pod.metadata.name} container has run with an error. Please check container logs",
                         )
         if pod.status.conditions:
             for cond in pod.status.conditions:
