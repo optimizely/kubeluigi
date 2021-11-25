@@ -16,7 +16,7 @@ from kubeluigi.k8s import (
 
 from kubernetes.client import V1Pod, V1PodCondition
 
-from mock import patch, MagicMock
+from mock import patch, MagicMock, PropertyMock
 import pytest
 
 
@@ -221,6 +221,22 @@ def test_has_job_started_pod_is_terminated(mocked_get_job_pods):
     pod = pod_spec_from_dict("name_of_pod", dummy_pod_spec, labels=labels)
     job = job_definition("my_job", "my_uiid", 100, pod, labels, "my_namespace")
     assert has_job_started(job)
+
+
+@patch("kubeluigi.k8s.get_job_pods")
+def test_has_job_started_pod_is_failed(mocked_get_job_pods):
+    # a pod associated  with the job is in a failed state
+    failed_pod = MagicMock()
+    failed_pod_status = MagicMock()
+    failed_pod_status.status.state.terminated = MagicMock()
+    failed_pod_status.status.state.terminated.reason = 'Error'
+    failed_pod.status.container_statuses = [failed_pod_status]
+    mocked_get_job_pods.return_value = [failed_pod]
+    labels = {"l1": "label1"}
+    pod = pod_spec_from_dict("name_of_pod", dummy_pod_spec, labels=labels)
+    job = job_definition("my_job", "my_uiid", 100, pod, labels, "my_namespace")
+    with pytest.raises(FailedJob):
+        has_job_started(job)
 
 
 @patch("kubeluigi.k8s.get_job_pods")
