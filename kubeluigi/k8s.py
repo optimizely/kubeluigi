@@ -159,12 +159,13 @@ def print_pod_logs(job: V1Job, pod: V1PodSpec):
     """
     logs_prefix = "JOB: " + job.metadata.name + " POD: " + pod.metadata.name
     while True:
-        logger.info(logs_prefix + " ...waiting for POD to start")
-        sleep(DEFAULT_POLL_INTERVAL)
         try:
             if is_pod_running(pod):
                 logger.info(logs_prefix + " POD is running")
                 break
+            else:
+                logger.info(logs_prefix + " ...waiting for POD to start")
+                sleep(DEFAULT_POLL_INTERVAL)
         except ApiException as e:
             logger.warning("error while fetching pod logs :" + logs_prefix)
             logger.exception(e)
@@ -336,6 +337,16 @@ def clean_job_resources(k8s_client: ApiClient, job: V1Job) -> None:
     delete kubernetes resources associated to a Job
     """
     logger.info(f"JOB: {job.metadata.name} - Cleaning Job's resources")
+
+    # Try to print pod logs before cleaning up
+    logger.info("Trying to get Pod logs before cleaning up...")
+    pods = get_job_pods(job)
+    for pod in pods:
+        try:
+            print_pod_logs(job, pod)
+        except Exception as e:
+            logger.warning("no logs for POD: {pod.metadata.name}: {e}")
+    
     api_response = k8s_client.delete_namespaced_job(
         name=job.metadata.name,
         namespace=job.metadata.namespace,
