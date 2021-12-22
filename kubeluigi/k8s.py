@@ -347,15 +347,15 @@ def clean_job_resources(k8s_client: ApiClient, job: V1Job) -> None:
         except Exception as e:
             logger.warning("no logs for POD: {pod.metadata.name}: {e}")
     
-    api_response = k8s_client.delete_namespaced_job(
-        name=job.metadata.name,
-        namespace=job.metadata.namespace,
-        body=V1DeleteOptions(propagation_policy="Background", grace_period_seconds=5),
-    )
-    # fix this error handling
-    if api_response.status != "Success":
-        logger.warning(
-            f"Error while cleaning job: {job.metadata.name} : {api_response}"
-        )
-        raise Exception(f"error cleaning job: {job.metadata.name} : {api_response}")
-    logger.info(f"JOB: {job.metadata.name} -  Finished cleaning Job's resources")
+    # api_response = k8s_client.delete_namespaced_job(
+    #     name=job.metadata.name,
+    #     namespace=job.metadata.namespace,
+    #     body=V1DeleteOptions(propagation_policy="Background", grace_period_seconds=5),
+    # )
+    # # fix this error handling
+    # if api_response.status != "Success":
+    #     logger.warning(
+    #         f"Error while cleaning job: {job.metadata.name} : {api_response}"
+    #     )
+    #     raise Exception(f"error cleaning job: {job.metadata.name} : {api_response}")
+    # logger.info(f"JOB: {job.metadata.name} -  Finished cleaning Job's resources")
