@@ -278,9 +278,42 @@ def has_job_started(job: V1Job) -> bool:
                             )
                         logger.info(f"{logs_prefix} Waiting for cluster to Scale up..")
                         return False
-
+    logger.info("Logs for the job can be found here: https://portal.azure.com/#blade/Microsoft_Azure_Monitoring/AzureMonitoringBrowseBlade/logs")
+    logs_queries = get_job_pod_logs_query(job)
+    for query in logs_queries:
+        logger.info(f"Find logs for this jobs using the following query: {query}")
     return True
 
+def get_job_pod_logs_query(job:V1Job):
+    """ 
+        Returns a list of queries to use in azure monitor to retrieve logs for the pods running
+        for the scheduled job
+    """
+    pods = get_job_pods(job)
+    queries = [
+        f"""
+            let startTimestamp = ago(1h);
+            let podName = "{pod.metadata.name}";
+            let podNameSpace = "moussaka";
+            KubePodInventory
+            | where TimeGenerated > startTimestamp
+            | project ContainerID, PodName=Name, Namespace
+            | where PodName contains podName and Namespace startswith podNameSpace
+            | distinct ContainerID, PodName
+            | join
+            (
+                ContainerLog
+                | where TimeGenerated > startTimestamp
+            )
+            on ContainerID
+            | project TimeGenerated, PodName, LogEntry, LogEntrySource
+            | extend TimeGenerated = TimeGenerated - 21600s | order by TimeGenerated desc
+            | summarize by TimeGenerated, LogEntry
+            | order by TimeGenerated desc
+        """
+        for pod in pods
+    ]
+    return queries
 
 def is_job_completed(k8s_client: ApiClient, job: V1Job):
     """
