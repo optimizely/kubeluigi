@@ -265,7 +265,7 @@ def has_job_started(job: V1Job) -> bool:
                         )
         if pod.status.conditions:
             for cond in pod.status.conditions:
-                logger.info(f"{logs_prefix} pod condition {cond}")
+                logger.debug(f"{logs_prefix} pod condition {cond}")
                 if cond.reason == "ContainersNotReady":
                     return False
                 if cond.reason == "Unschedulable":
