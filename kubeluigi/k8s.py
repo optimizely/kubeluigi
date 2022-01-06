@@ -250,7 +250,7 @@ def has_job_started(job: V1Job) -> bool:
         logs_prefix = "JOB: " + job.metadata.name + " POD: " + pod.metadata.name
         if pod.status.container_statuses:
             for status in pod.status.container_statuses:
-                logger.info(f"{logs_prefix} container status {status}")
+                logger.debug(f"{logs_prefix} container status {status}")
                 if status.state.waiting:
                     if status.state.waiting.reason != "ContainerCreating":
                         raise FailedJob(
