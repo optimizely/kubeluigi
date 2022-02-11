@@ -28,7 +28,7 @@ from kubernetes.client.exceptions import ApiException
 
 logger = logging.getLogger("luigi-interface")
 
-DEFAULT_POLL_INTERVAL = 2
+DEFAULT_POLL_INTERVAL = 30
 
 
 class FailedJob(Exception):
