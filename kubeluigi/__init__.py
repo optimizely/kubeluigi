@@ -85,8 +85,7 @@ class KubernetesJobTask:
         """
         raise NotImplementedError("subclass must define spec_schema")
 
-    def run(self):
-        self._init_kubernetes()
+    def build_job_definition(self):
         pod_template_spec = pod_spec_from_dict(
             self.uu_name, self.spec_schema, self.restart_policy, self.labels
         )
@@ -99,6 +98,11 @@ class KubernetesJobTask:
             labels=self.labels,
             namespace=self.namespace,
         )
+        return job
+        
+    def run(self):
+        self._init_kubernetes()
+        job = self.build_job_definition()
         self.__logger.info("Submitting Kubernetes Job: " + self.uu_name)
         try:
             run_and_track_job(self.kubernetes_client, job)
