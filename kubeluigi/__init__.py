@@ -1,6 +1,7 @@
 from datetime import datetime
 import logging
 import uuid
+import yaml
 
 from kubeluigi.k8s import (
     clean_job_resources,
@@ -10,15 +11,14 @@ from kubeluigi.k8s import (
     kubernetes_client,
 )
 
+from kubernetes.client import ApiClient
 
 logger = logging.getLogger("luigi-interface")
 
 
 class KubernetesJobTask:
-    
-    def _init_kubernetes(self):
-        self.__logger = logger
-        self.kubernetes_client = kubernetes_client()
+
+    def _init_task_metadata(self):
         self.job_uuid = str(uuid.uuid4().hex)
         now = datetime.utcnow()
         self.uu_name = "%s-%s-%s" % (
@@ -26,6 +26,10 @@ class KubernetesJobTask:
             now.strftime("%Y%m%d%H%M%S"),
             self.job_uuid[:16],
         )
+    
+    def _init_kubernetes(self):
+        self.__logger = logger
+        self.kubernetes_client = kubernetes_client()
 
     @property
     def restart_policy(self):
@@ -86,6 +90,7 @@ class KubernetesJobTask:
         raise NotImplementedError("subclass must define spec_schema")
 
     def build_job_definition(self):
+        self._init_task_metadata()
         pod_template_spec = pod_spec_from_dict(
             self.uu_name, self.spec_schema, self.restart_policy, self.labels
         )
@@ -99,6 +104,12 @@ class KubernetesJobTask:
             namespace=self.namespace,
         )
         return job
+
+    def as_yaml(self):
+        job = self.build_job_definition()
+        job_dict = ApiClient().sanitize_for_serialization(job)
+        str_yaml = yaml.safe_dump(job_dict, default_flow_style=False, sort_keys=False)
+        return str_yaml
         
     def run(self):
         self._init_kubernetes()
