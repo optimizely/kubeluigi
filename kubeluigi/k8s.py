@@ -392,3 +392,16 @@ def clean_job_resources(k8s_client: ApiClient, job: V1Job) -> None:
         )
         raise Exception(f"error cleaning job: {job.metadata.name} : {api_response}")
     logger.info(f"JOB: {job.metadata.name} -  Finished cleaning Job's resources")
+
+
+def attach_volume_to_spec(pod_spec, volume):
+    volume_spec = volume.pod_volume_spec()
+    volume_mnt_spec = volume.pod_mount_spec()
+    # updating volume_mounts
+    mounted_volumes = pod_spec['containers'][0].get('volume_mounts', [])
+    pod_spec['containers'][0]['volume_mounts'] = mounted_volumes + volume_mnt_spec['volume_mounts']
+
+    # updating volumes
+    current_volumes = pod_spec.get('volumes', [])
+    pod_spec['volumes'] = current_volumes + volume_spec['volumes']
+    return pod_spec

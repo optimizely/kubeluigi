@@ -9,7 +9,6 @@ class DummyTask(KubernetesJobTask):
     def name(self):
         return "my_dummy_task"
 
-    @property
     def spec_schema(self):
         return {
             "containers": [{
