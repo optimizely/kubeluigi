@@ -9,16 +9,15 @@ from kubeluigi.k8s import (
     pod_spec_from_dict,
     run_and_track_job,
     kubernetes_client,
-    attach_volume_to_spec
+    attach_volume_to_spec,
 )
 
 from kubernetes.client import ApiClient
 
-logger = logging.getLogger("luigi-interface")
+logger = logging.getLogger("kubeluigi")
 
 
 class KubernetesJobTask:
-
     def _init_task_metadata(self):
         self.job_uuid = str(uuid.uuid4().hex)
         now = datetime.utcnow()
@@ -27,7 +26,7 @@ class KubernetesJobTask:
             now.strftime("%Y%m%d%H%M%S"),
             self.job_uuid[:16],
         )
-    
+
     def _init_kubernetes(self):
         self.__logger = logger
         self.kubernetes_client = kubernetes_client()
@@ -112,11 +111,11 @@ class KubernetesJobTask:
         job_dict = ApiClient().sanitize_for_serialization(job)
         str_yaml = yaml.safe_dump(job_dict, default_flow_style=False, sort_keys=False)
         return str_yaml
-        
+
     def run(self):
         self._init_kubernetes()
         job = self.build_job_definition()
-        self.__logger.info("Submitting Kubernetes Job: " + self.uu_name)
+        self.__logger.debug("Submitting Kubernetes Job: " + self.uu_name)
         try:
             run_and_track_job(self.kubernetes_client, job)
         except e:
@@ -138,7 +137,7 @@ class KubernetesJobTask:
         """
         overrides the spec_schema of a task to attach a volume
         """
-        if 'volumes' not in spec_schema and hasattr(self, 'volumes'):
+        if "volumes" not in spec_schema and hasattr(self, "volumes"):
             for volume in self.volumes:
                 spec_schema = attach_volume_to_spec(spec_schema, volume)
         return spec_schema

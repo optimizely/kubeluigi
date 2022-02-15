@@ -3,6 +3,10 @@ from typing import Dict, Generator, List
 import logging
 import re
 from time import sleep
+import gzip
+import zlib
+from base64 import b64encode
+from urllib.parse import quote
 
 from kubernetes import config, watch
 from kubernetes.client import (
@@ -18,7 +22,7 @@ from kubernetes.client import (
     V1PodCondition,
     V1Volume,
     V1VolumeMount,
-    V1HostPathVolumeSource
+    V1HostPathVolumeSource,
 )
 from kubernetes.client.api.core_v1_api import CoreV1Api
 from kubernetes.client.api_client import ApiClient
@@ -26,7 +30,7 @@ from kubernetes.client.configuration import Configuration
 from kubernetes.client.exceptions import ApiException
 
 
-logger = logging.getLogger("luigi-interface")
+logger = logging.getLogger("kubeluigi")
 
 DEFAULT_POLL_INTERVAL = 2
 
@@ -58,15 +62,17 @@ def pod_spec_from_dict(
     for container in spec_schema["containers"]:
         if "imagePullPolicy" in container:
             container["image_pull_policy"] = container.pop("imagePullPolicy")
-        if "volume_mounts" in container and container['volume_mounts']:
+        if "volume_mounts" in container and container["volume_mounts"]:
             container = get_container_with_volume_mounts(container)
         containers.append(V1Container(**container))
-    if 'volumes' in spec_schema:
-        for volume in spec_schema['volumes']:
+    if "volumes" in spec_schema:
+        for volume in spec_schema["volumes"]:
             volumes.append(V1Volume(**volume))
     pod_template = V1PodTemplateSpec(
         metadata=V1ObjectMeta(name=name, labels=labels),
-        spec=V1PodSpec(restart_policy=restartPolicy, containers=containers, volumes=volumes),
+        spec=V1PodSpec(
+            restart_policy=restartPolicy, containers=containers, volumes=volumes
+        ),
     )
     return pod_template
 
@@ -76,13 +82,13 @@ def get_container_with_volume_mounts(container):
     Returns a container with V1VolumeMount objects from the spec schema of a container
     and a list of V1volume objects
     """
-    volumes_spec = container['volume_mounts']
+    volumes_spec = container["volume_mounts"]
     mount_volumes = []
     for volume in volumes_spec:
-        mount_path = volume['mountPath']
-        name = volume['name']
+        mount_path = volume["mountPath"]
+        name = volume["name"]
         mount_volumes.append(V1VolumeMount(mount_path=mount_path, name=name))
-    container['volume_mounts'] = mount_volumes
+    container["volume_mounts"] = mount_volumes
     return container
 
 
@@ -161,10 +167,10 @@ def print_pod_logs(job: V1Job, pod: V1PodSpec):
     while True:
         try:
             if is_pod_running(pod):
-                logger.info(logs_prefix + " POD is running")
+                logger.debug(logs_prefix + " POD is running")
                 break
             else:
-                logger.info(logs_prefix + " ...waiting for POD to start")
+                logger.debug(logs_prefix + " ...waiting for POD to start")
                 sleep(DEFAULT_POLL_INTERVAL)
         except ApiException as e:
             logger.warning("error while fetching pod logs :" + logs_prefix)
@@ -174,7 +180,7 @@ def print_pod_logs(job: V1Job, pod: V1PodSpec):
     stream = get_pod_log_stream(pod)
     for i in stream:
         l = logs_prefix + ": " + i
-        logger.info(l)
+        logger.debug(l)
 
 
 class BackgroundJobLogger:
@@ -221,10 +227,13 @@ def is_pod_waiting_for_scale_up(condition: V1PodCondition) -> bool:
             return True
         return False
 
-    
+
 def has_scaling_failed(condition: V1PodCondition) -> bool:
-    if "Unschedulable" in condition.reason and \
-       condition.message and "pod didn't trigger scale-up (it wouldn" in condition.message:
+    if (
+        "Unschedulable" in condition.reason
+        and condition.message
+        and "pod didn't trigger scale-up (it wouldn" in condition.message
+    ):
         return True
     return False
 
@@ -242,7 +251,7 @@ def has_job_started(job: V1Job) -> bool:
         logger.debug(
             f"JOB: {job.metadata.name} -  No pods found for %s, waiting for cluster state to match the job definition"
         )
-        logger.info("waiting for cluster to match job definition")
+        logger.debug("waiting for cluster to match job definition")
         sleep(WAIT_FOR_JOB_CREATION_INTERVAL)
         pods = get_job_pods(job)
 
@@ -258,7 +267,7 @@ def has_job_started(job: V1Job) -> bool:
                             message=f"Job: {job.metadata.name} - Pod: {pod.metadata.name} container has a  weird status : {status}",
                         )
                 if status.state.terminated:
-                    if status.state.terminated.reason == 'Error':
+                    if status.state.terminated.reason == "Error":
                         raise FailedJob(
                             job=job,
                             message=f"Job: {job.metadata.name} - Pod: {pod.metadata.name} container has run with an error. Please check container logs",
@@ -271,23 +280,51 @@ def has_job_started(job: V1Job) -> bool:
                 if cond.reason == "Unschedulable":
                     if is_pod_waiting_for_scale_up(cond):
                         if has_scaling_failed(cond):
-                            logger.info(f"{logs_prefix} Cluster could not scale up.")
+                            logger.debug(f"{logs_prefix} Cluster could not scale up.")
                             raise FailedJob(
                                 job=job,
                                 message=f"Job: {job.metadata.name} - Pod: {pod.metadata.name} Failed to scale up : {cond.reason}  {cond.message}",
                             )
-                        logger.info(f"{logs_prefix} Waiting for cluster to Scale up..")
+                        logger.debug(f"{logs_prefix} Waiting for cluster to Scale up..")
                         return False
-    logger.info("Logs for the job can be found here: https://portal.azure.com/#blade/Microsoft_Azure_Monitoring/AzureMonitoringBrowseBlade/logs")
+    logger.debug(
+        "Logs for the job can be found here: https://portal.azure.com/#blade/Microsoft_Azure_Monitoring/AzureMonitoringBrowseBlade/logs"
+    )
     logs_queries = get_job_pod_logs_query(job)
     for query in logs_queries:
-        logger.info(f"Find logs for this jobs using the following query: {query}")
+        logs_query_link = get_query_link(query)
+        logger.info(f"Pod Logs: {logs_query_link}")
     return True
 
-def get_job_pod_logs_query(job:V1Job):
-    """ 
-        Returns a list of queries to use in azure monitor to retrieve logs for the pods running
-        for the scheduled job
+
+def get_query_link(query):
+    TENANT_ID = "7c4a1b79-4b8e-4ac7-b7e1-c5c3c5a4c139"
+    SUBSCRIPTION_ID = "aa828058-a40f-4041-85d6-32dde4fe0e92"
+    RESOURCEGROUP = "ds-kubernetes"
+    zipped_query = zlib.compress(bytes(query, "utf-8"))
+    b64_query = b64encode(zipped_query).decode("utf-8")
+    encoded_query = quote(b64_query, safe="")
+    
+    return (
+        f"https://portal.azure.com#@{TENANT_ID}"
+        f"/blade/Microsoft_Azure_Monitoring_Logs/LogsBlade/resourceId/%2Fsubscriptions%2F{SUBSCRIPTION_ID}"
+        f"%2Fresourcegroups%2F{RESOURCEGROUP}"
+        f"/source/LogsBlade.AnalyticsShareLinkToQuery/q/{encoded_query}"
+    )
+
+
+    # return (
+    #     f"https://portal.azure.com#@{TENANT_ID}"
+    #     f"/blade/Microsoft_Azure_Monitoring_Logs/LogsBlade/resourceId/%2Fsubscriptions%2F{SUBSCRIPTION_ID}"
+    #     f"%2FresourceGroups%2F{RESOURCEGROUP}"
+    #     f"/source/LogsBlade.AnalyticsShareLinkToQuery/q/{encoded_query}"
+    # )
+
+
+def get_job_pod_logs_query(job: V1Job):
+    """
+    Returns a list of queries to use in azure monitor to retrieve logs for the pods running
+    for the scheduled job
     """
     pods = get_job_pods(job)
     queries = [
@@ -315,6 +352,7 @@ def get_job_pod_logs_query(job:V1Job):
     ]
     return queries
 
+
 def is_job_completed(k8s_client: ApiClient, job: V1Job):
     """
     returns true if a job is completed
@@ -328,7 +366,7 @@ def is_job_completed(k8s_client: ApiClient, job: V1Job):
     has_failed = api_response.status.failed is not None
     if has_succeded or has_failed:
         if has_succeded:
-            logger.info("JOB: " + job.metadata.name + " has succeded")
+            logger.debug("JOB: " + job.metadata.name + " has succeded")
             return True
 
         if has_failed:
@@ -345,20 +383,22 @@ def run_and_track_job(k8s_client: ApiClient, job: V1Job) -> None:
     """
     Tracks the execution of a job by following its state changes.
     """
-    logger.info(f"JOB: {job.metadata.name} submitting job")
+    logger.debug(f"JOB: {job.metadata.name} submitting job")
     api_response = k8s_client.create_namespaced_job(
         body=job, namespace=job.metadata.namespace
     )
-    logger.info(f"JOB: {job.metadata.name} submitted")
+    logger.debug(f"JOB: {job.metadata.name} submitted")
     logger.debug(f"API response job creation: {api_response}")
-    logger.info("---Job Definition----")
-    logger.info(job)
-    logger.info("---End of Job Definition")
+    logger.debug("---Job Definition----")
+    logger.debug(job)
+    logger.debug("---End of Job Definition")
     job_completed = False
     with BackgroundJobLogger(job):
         while not has_job_started(job):
             sleep(DEFAULT_POLL_INTERVAL)
-            logger.info("Waiting for Kubernetes job " + job.metadata.name + " to start")
+            logger.debug(
+                "Waiting for Kubernetes job " + job.metadata.name + " to start"
+            )
 
         while not job_completed:
             job_completed = is_job_completed(k8s_client, job)
@@ -369,17 +409,17 @@ def clean_job_resources(k8s_client: ApiClient, job: V1Job) -> None:
     """
     delete kubernetes resources associated to a Job
     """
-    logger.info(f"JOB: {job.metadata.name} - Cleaning Job's resources")
+    logger.debug(f"JOB: {job.metadata.name} - Cleaning Job's resources")
 
     # Try to print pod logs before cleaning up
-    logger.info("Trying to get Pod logs before cleaning up...")
+    logger.debug("Trying to get Pod logs before cleaning up...")
     pods = get_job_pods(job)
     for pod in pods:
         try:
             print_pod_logs(job, pod)
         except Exception as e:
             logger.warning("no logs for POD: {pod.metadata.name}: {e}")
-    
+
     api_response = k8s_client.delete_namespaced_job(
         name=job.metadata.name,
         namespace=job.metadata.namespace,
@@ -391,17 +431,19 @@ def clean_job_resources(k8s_client: ApiClient, job: V1Job) -> None:
             f"Error while cleaning job: {job.metadata.name} : {api_response}"
         )
         raise Exception(f"error cleaning job: {job.metadata.name} : {api_response}")
-    logger.info(f"JOB: {job.metadata.name} -  Finished cleaning Job's resources")
+    logger.debug(f"JOB: {job.metadata.name} -  Finished cleaning Job's resources")
 
 
 def attach_volume_to_spec(pod_spec, volume):
     volume_spec = volume.pod_volume_spec()
     volume_mnt_spec = volume.pod_mount_spec()
     # updating volume_mounts
-    mounted_volumes = pod_spec['containers'][0].get('volume_mounts', [])
-    pod_spec['containers'][0]['volume_mounts'] = mounted_volumes + volume_mnt_spec['volume_mounts']
+    mounted_volumes = pod_spec["containers"][0].get("volume_mounts", [])
+    pod_spec["containers"][0]["volume_mounts"] = (
+        mounted_volumes + volume_mnt_spec["volume_mounts"]
+    )
 
     # updating volumes
-    current_volumes = pod_spec.get('volumes', [])
-    pod_spec['volumes'] = current_volumes + volume_spec['volumes']
+    current_volumes = pod_spec.get("volumes", [])
+    pod_spec["volumes"] = current_volumes + volume_spec["volumes"]
     return pod_spec
