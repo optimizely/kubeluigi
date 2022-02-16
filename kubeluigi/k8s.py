@@ -182,9 +182,9 @@ def print_pod_logs(job: V1Job, pod: V1PodSpec):
         stream = get_pod_log_stream(pod)
         for i in stream:
             l = logs_prefix + ": " + i
-            logger.info(l)
+            logger.debug(l)
     except urllib3.exceptions.ProtocolError:
-        logger.info("Failed to get pod log stream...")
+        logger.debug("Failed to get pod log stream...")
 
 
 class BackgroundJobLogger:
