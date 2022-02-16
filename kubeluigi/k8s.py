@@ -7,6 +7,7 @@ import gzip
 import zlib
 from base64 import b64encode
 from urllib.parse import quote
+import urllib3
 
 from kubernetes import config, watch
 from kubernetes.client import (
@@ -177,10 +178,13 @@ def print_pod_logs(job: V1Job, pod: V1PodSpec):
             logger.exception(e)
             raise e
 
-    stream = get_pod_log_stream(pod)
-    for i in stream:
-        l = logs_prefix + ": " + i
-        logger.debug(l)
+    try:
+        stream = get_pod_log_stream(pod)
+        for i in stream:
+            l = logs_prefix + ": " + i
+            logger.debug(l)
+    except urllib3.exceptions.ProtocolError:
+        logger.debug("Failed to get pod log stream...")
 
 
 class BackgroundJobLogger:
@@ -304,21 +308,13 @@ def get_query_link(query):
     zipped_query = zlib.compress(bytes(query, "utf-8"))
     b64_query = b64encode(zipped_query).decode("utf-8")
     encoded_query = quote(b64_query, safe="")
-    
+
     return (
         f"https://portal.azure.com#@{TENANT_ID}"
         f"/blade/Microsoft_Azure_Monitoring_Logs/LogsBlade/resourceId/%2Fsubscriptions%2F{SUBSCRIPTION_ID}"
         f"%2Fresourcegroups%2F{RESOURCEGROUP}"
         f"/source/LogsBlade.AnalyticsShareLinkToQuery/q/{encoded_query}"
     )
-
-
-    # return (
-    #     f"https://portal.azure.com#@{TENANT_ID}"
-    #     f"/blade/Microsoft_Azure_Monitoring_Logs/LogsBlade/resourceId/%2Fsubscriptions%2F{SUBSCRIPTION_ID}"
-    #     f"%2FresourceGroups%2F{RESOURCEGROUP}"
-    #     f"/source/LogsBlade.AnalyticsShareLinkToQuery/q/{encoded_query}"
-    # )
 
 
 def get_job_pod_logs_query(job: V1Job):
