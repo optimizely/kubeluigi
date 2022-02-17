@@ -112,17 +112,22 @@ class KubernetesJobTask:
         str_yaml = yaml.safe_dump(job_dict, default_flow_style=False, sort_keys=False)
         return str_yaml
 
-    def run(self):
+    def run_gen(self):
         self._init_kubernetes()
         job = self.build_job_definition()
         self.__logger.debug("Submitting Kubernetes Job: " + self.uu_name)
         try:
-            run_and_track_job(self.kubernetes_client, job)
-        except e:
+            yield from run_and_track_job(self.kubernetes_client, job)
+        except Exception as e:
             logger.exception("Luigi has failed to submit the job, starting cleaning")
+            logger.exception(e)
             raise e
         finally:
             clean_job_resources(self.kubernetes_client, job)
+
+    def run(self):
+        for _ in self.run_gen():
+            continue
 
     def output(self):
         """

@@ -242,7 +242,7 @@ def has_scaling_failed(condition: V1PodCondition) -> bool:
     return False
 
 
-def has_job_started(job: V1Job) -> bool:
+def has_job_started(job: V1Job) -> List[V1Pod]:
     """
     Checks if a job has started running.
     It checks the status of pods associated to a job.
@@ -291,62 +291,7 @@ def has_job_started(job: V1Job) -> bool:
                             )
                         logger.debug(f"{logs_prefix} Waiting for cluster to Scale up..")
                         return False
-    logger.debug(
-        "Logs for the job can be found here: https://portal.azure.com/#blade/Microsoft_Azure_Monitoring/AzureMonitoringBrowseBlade/logs"
-    )
-    logs_queries = get_job_pod_logs_query(job)
-    for query in logs_queries:
-        logs_query_link = get_query_link(query)
-        logger.info(f"Pod Logs: {logs_query_link}")
     return True
-
-
-def get_query_link(query):
-    TENANT_ID = "7c4a1b79-4b8e-4ac7-b7e1-c5c3c5a4c139"
-    SUBSCRIPTION_ID = "aa828058-a40f-4041-85d6-32dde4fe0e92"
-    RESOURCEGROUP = "ds-kubernetes"
-    zipped_query = zlib.compress(bytes(query, "utf-8"))
-    b64_query = b64encode(zipped_query).decode("utf-8")
-    encoded_query = quote(b64_query, safe="")
-
-    return (
-        f"https://portal.azure.com#@{TENANT_ID}"
-        f"/blade/Microsoft_Azure_Monitoring_Logs/LogsBlade/resourceId/%2Fsubscriptions%2F{SUBSCRIPTION_ID}"
-        f"%2Fresourcegroups%2F{RESOURCEGROUP}"
-        f"/source/LogsBlade.AnalyticsShareLinkToQuery/q/{encoded_query}"
-    )
-
-
-def get_job_pod_logs_query(job: V1Job):
-    """
-    Returns a list of queries to use in azure monitor to retrieve logs for the pods running
-    for the scheduled job
-    """
-    pods = get_job_pods(job)
-    queries = [
-        f"""
-            let startTimestamp = ago(1h);
-            let podName = "{pod.metadata.name}";
-            let podNameSpace = "moussaka";
-            KubePodInventory
-            | where TimeGenerated > startTimestamp
-            | project ContainerID, PodName=Name, Namespace
-            | where PodName contains podName and Namespace startswith podNameSpace
-            | distinct ContainerID, PodName
-            | join
-            (
-                ContainerLog
-                | where TimeGenerated > startTimestamp
-            )
-            on ContainerID
-            | project TimeGenerated, PodName, LogEntry, LogEntrySource
-            | extend TimeGenerated = TimeGenerated - 21600s | order by TimeGenerated desc
-            | summarize by TimeGenerated, LogEntry
-            | order by TimeGenerated desc
-        """
-        for pod in pods
-    ]
-    return queries
 
 
 def is_job_completed(k8s_client: ApiClient, job: V1Job):
@@ -395,6 +340,9 @@ def run_and_track_job(k8s_client: ApiClient, job: V1Job) -> None:
             logger.debug(
                 "Waiting for Kubernetes job " + job.metadata.name + " to start"
             )
+
+        pods = get_job_pods(job)
+        yield pods
 
         while not job_completed:
             job_completed = is_job_completed(k8s_client, job)
