@@ -242,7 +242,7 @@ def has_scaling_failed(condition: V1PodCondition) -> bool:
     return False
 
 
-def has_job_started(job: V1Job) -> List[V1Pod]:
+def has_job_started(job: V1Job) -> bool:
     """
     Checks if a job has started running.
     It checks the status of pods associated to a job.

@@ -27,6 +27,11 @@ class KubernetesJobTask:
             self.job_uuid[:16],
         )
 
+    def __init__(self):
+        # we enforce that metadata to be populated ASAP
+        # this means we can call build_job_definition as many times as we want..
+        self._init_task_metadata()
+
     def _init_kubernetes(self):
         self.__logger = logger
         self.kubernetes_client = kubernetes_client()
@@ -89,7 +94,6 @@ class KubernetesJobTask:
         raise NotImplementedError("subclass must define spec_schema")
 
     def build_job_definition(self):
-        self._init_task_metadata()
         schema = self.spec_schema()
         schema_with_volumes = self._attach_volumes_to_spec(schema)
         pod_template_spec = pod_spec_from_dict(
@@ -112,22 +116,24 @@ class KubernetesJobTask:
         str_yaml = yaml.safe_dump(job_dict, default_flow_style=False, sort_keys=False)
         return str_yaml
 
-    def run_gen(self):
+    def run(self):
         self._init_kubernetes()
         job = self.build_job_definition()
+        pods = get_job_pods(job)
+        for pod in pods:
+            self.__logger.info("Pod Logs:")
+            # whoever is using the tool for sure can access kubectl...
+            self.__logger.info(
+                f"\tkubectl logs -f -n {pod.metadata.namespace} {pod.metadata.name}")
         self.__logger.debug("Submitting Kubernetes Job: " + self.uu_name)
         try:
-            yield from run_and_track_job(self.kubernetes_client, job)
+            run_and_track_job(self.kubernetes_client, job)
         except Exception as e:
             logger.exception("Luigi has failed to submit the job, starting cleaning")
             logger.exception(e)
             raise e
         finally:
             clean_job_resources(self.kubernetes_client, job)
-
-    def run(self):
-        for _ in self.run_gen():
-            continue
 
     def output(self):
         """
