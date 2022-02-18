@@ -1,7 +1,7 @@
 import yaml
 
 
-from mock import patch
+from mock import patch, MagicMock
 import pytest
 
 from kubeluigi import KubernetesJobTask
@@ -56,13 +56,17 @@ def test_job_definition_as_yaml():
 @patch('kubeluigi.run_and_track_job')
 @patch("kubeluigi.clean_job_resources")
 @patch.object(KubernetesJobTask, 'build_job_definition')
-def test_failing_task_clean_resources(mocked_build_job_definition,
-                                mocked_clean_job_resources, mocked_run_and_track_job):
+@patch.object(KubernetesJobTask, '_init_kubernetes')
+def test_failing_task_clean_resources(mocked_init_kubernetes,
+                                      mocked_build_job_definition,
+                                      mocked_clean_job_resources, mocked_run_and_track_job):
     """
     testing k8s resources are cleaned when running job fails.
     """
     task = DummyTask()
     task._init_task_metadata()
+    task.kubernetes_client = MagicMock()
+    task._KubernetesJobTask__logger = MagicMock()
     class DummyException(Exception):
         pass
     e = DummyException()
