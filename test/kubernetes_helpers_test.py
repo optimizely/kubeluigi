@@ -297,6 +297,7 @@ def test_run_and_track_job(mocked_has_job_started, mocked_is_job_completed):
     assert mocked_is_job_completed.call_count == 3
 
 
+
 @patch("kubeluigi.k8s.has_job_started")
 @patch("kubeluigi.k8s.is_job_completed")
 @patch("kubeluigi.k8s.DEFAULT_POLL_INTERVAL", 0)
