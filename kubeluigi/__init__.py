@@ -9,6 +9,7 @@ from kubeluigi.k8s import (
     pod_spec_from_dict,
     run_and_track_job,
     kubernetes_client,
+    attach_volume_to_spec
 )
 
 from kubernetes.client import ApiClient
@@ -74,7 +75,6 @@ class KubernetesJobTask:
         """
         return {}
 
-    @property
     def spec_schema(self):
         """
         Kubernetes Job spec schema in JSON format, an example follows.
@@ -91,8 +91,10 @@ class KubernetesJobTask:
 
     def build_job_definition(self):
         self._init_task_metadata()
+        schema = self.spec_schema()
+        schema_with_volumes = self._attach_volumes_to_spec(schema)
         pod_template_spec = pod_spec_from_dict(
-            self.uu_name, self.spec_schema, self.restart_policy, self.labels
+            self.uu_name, schema_with_volumes, self.restart_policy, self.labels
         )
 
         job = job_definition(
@@ -130,3 +132,12 @@ class KubernetesJobTask:
             return luigi.LocalTarget(os.path.join('/tmp', 'example'))
         """
         pass
+
+    def _attach_volumes_to_spec(self, spec_schema):
+        """
+        overrides the spec_schema of a task to attach a volume
+        """
+        if 'volumes' not in spec_schema and hasattr(self, 'volumes'):
+            for volume in self.volumes:
+                spec_schema = attach_volume_to_spec(spec_schema, volume)
+        return spec_schema

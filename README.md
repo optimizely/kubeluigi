@@ -55,7 +55,6 @@ class Task(KubernetesJobTask):
     def labels(self):
         return {"my_label": "my_label_1"}
 
-    @property
     def spec_schema(self):
         print(self.container_name)
         print(self.container_tag)

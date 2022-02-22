@@ -11,7 +11,8 @@ from kubeluigi.k8s import (
     FailedJob,
     run_and_track_job,
     BackgroundJobLogger,
-    get_container_with_volume_mounts
+    get_container_with_volume_mounts,
+    attach_volume_to_spec
 )
 
 from kubernetes.client import V1Pod, V1PodCondition
