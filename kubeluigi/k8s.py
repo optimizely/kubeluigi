@@ -165,25 +165,12 @@ def print_pod_logs(job: V1Job, pod: V1PodSpec):
     prints in realtime the logs of a running POD
     """
     logs_prefix = "JOB: " + job.metadata.name + " POD: " + pod.metadata.name
-    while True:
-        try:
-            if is_pod_running(pod):
-                logger.debug(logs_prefix + " POD is running")
-                break
-            else:
-                logger.debug(logs_prefix + " ...waiting for POD to start")
-                sleep(DEFAULT_POLL_INTERVAL)
-        except ApiException as e:
-            logger.warning("error while fetching pod logs :" + logs_prefix)
-            logger.exception(e)
-            raise e
-
     try:
         stream = get_pod_log_stream(pod)
         for i in stream:
             l = logs_prefix + ": " + i
             logger.debug(l)
-    except urllib3.exceptions.ProtocolError:
+    except (UnicodeDecodeError, urllib3.exceptions.ProtocolError) as error:
         logger.debug("Failed to get pod log stream...")
 
 
@@ -320,7 +307,9 @@ def is_job_completed(k8s_client: ApiClient, job: V1Job):
     return False
 
 
-def run_and_track_job(k8s_client: ApiClient, job: V1Job, onpodsready: Callable = lambda x: None) -> None:
+def run_and_track_job(
+    k8s_client: ApiClient, job: V1Job, onpodsready: Callable = lambda x: None
+) -> None:
     """
     Tracks the execution of a job by following its state changes.
     """
@@ -358,11 +347,11 @@ def clean_job_resources(k8s_client: ApiClient, job: V1Job) -> None:
     # Try to print pod logs before cleaning up
     logger.debug("Trying to get Pod logs before cleaning up...")
     pods = get_job_pods(job)
-    for pod in pods:
-        try:
-            print_pod_logs(job, pod)
-        except Exception as e:
-            logger.warning("no logs for POD: {pod.metadata.name}: {e}")
+    # for pod in pods:
+    #     try:
+    #         print_pod_logs(job, pod)
+    #     except Exception as e:
+    #         logger.warning("no logs for POD: {pod.metadata.name}: {e}")
 
     api_response = k8s_client.delete_namespaced_job(
         name=job.metadata.name,
