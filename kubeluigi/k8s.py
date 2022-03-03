@@ -140,8 +140,6 @@ def run_and_track_job(
         timeout_seconds=0,
     )
 
-    print(job.metadata.name)
-
     for raw_event in stream:
         rel = raw_event["object"].related
         name = raw_event["object"].metadata.name
