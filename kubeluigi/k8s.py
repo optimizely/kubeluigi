@@ -121,7 +121,7 @@ def job_definition(
 
 
 def run_and_track_job(
-    k8s_client: ApiClient, job: V1Job, onpodsready: Callable = lambda x: None
+    k8s_client: ApiClient, job: V1Job, onpodstarted: Callable = lambda x: None
 ) -> None:
     """
     Tracks the execution of a job by following its state changes.
@@ -149,7 +149,13 @@ def run_and_track_job(
 
             reason = raw_event["object"].reason
             message = raw_event["object"].message
+            involved_object = raw_event["object"].involved_object
+
             logger.info(f"{reason}, {message}")
+
+            if reason == "Started":
+                pod_name = involved_object.name
+                onpodstarted(pod_name)
 
             if reason == "Completed":
                 return

@@ -106,7 +106,7 @@ class KubernetesJobTask:
         )
         return job
 
-    def onpodsready(self):
+    def onpodstarted(self):
         pass
 
     def as_yaml(self):
@@ -120,7 +120,7 @@ class KubernetesJobTask:
         job = self.build_job_definition()
         logger.debug("Submitting Kubernetes Job: " + self.uu_name)
         try:
-            run_and_track_job(self.kubernetes_client, job, self.onpodsready)
+            run_and_track_job(self.kubernetes_client, job, self.onpodstarted)
         except Exception as e:
             logger.exception("Luigi has failed to submit the job, starting cleaning")
             logger.exception(e)
