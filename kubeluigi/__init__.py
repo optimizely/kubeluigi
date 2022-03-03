@@ -14,7 +14,7 @@ from kubeluigi.k8s import (
 
 from kubernetes.client import ApiClient
 
-logger = logging.getLogger("kubeluigi")
+logger = logging.getLogger(__name__)
 
 
 class KubernetesJobTask:
@@ -28,7 +28,7 @@ class KubernetesJobTask:
         )
 
     def _init_kubernetes(self):
-        self.__logger = logger
+        # self.__logger = logger
         self.kubernetes_client = kubernetes_client()
 
     @property
@@ -106,6 +106,9 @@ class KubernetesJobTask:
         )
         return job
 
+    def onpodsready(self):
+        pass
+
     def as_yaml(self):
         job = self.build_job_definition()
         job_dict = ApiClient().sanitize_for_serialization(job)
@@ -115,7 +118,7 @@ class KubernetesJobTask:
     def run(self):
         self._init_kubernetes()
         job = self.build_job_definition()
-        self.__logger.debug("Submitting Kubernetes Job: " + self.uu_name)
+        logger.debug("Submitting Kubernetes Job: " + self.uu_name)
         try:
             run_and_track_job(self.kubernetes_client, job, self.onpodsready)
         except Exception as e:

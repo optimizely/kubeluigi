@@ -8,6 +8,7 @@ import zlib
 from base64 import b64encode
 from urllib.parse import quote
 import urllib3
+import sys
 
 from kubernetes import config, watch
 from kubernetes.client import (
@@ -30,8 +31,7 @@ from kubernetes.client.api_client import ApiClient
 from kubernetes.client.configuration import Configuration
 from kubernetes.client.exceptions import ApiException
 
-
-logger = logging.getLogger("kubeluigi")
+logger = logging.getLogger(__name__)
 
 DEFAULT_POLL_INTERVAL = 30
 
@@ -93,17 +93,6 @@ def get_container_with_volume_mounts(container):
     return container
 
 
-def get_job_pods(job: V1Job) -> List[V1Pod]:
-    """
-    get the pods associated with a kubernetes Job
-    """
-    core_v1 = CoreV1Api()
-    label_selector = "job-name=" + job.metadata.name
-    return core_v1.list_namespaced_pod(
-        job.metadata.namespace, label_selector=label_selector
-    ).items
-
-
 def job_definition(
     job_name: str,
     job_uuid: str,
@@ -131,211 +120,41 @@ def job_definition(
     return job
 
 
-def get_pod_log_stream(pod: V1Pod) -> Generator[str, None, None]:
-    """
-    returns a stream object looping over the logs of a pod
-    """
-    core_v1 = corev1_client()
-    watcher = watch.Watch()
-    stream = watcher.stream(
-        core_v1.read_namespaced_pod_log,
-        name=pod.metadata.name,
-        namespace=pod.metadata.namespace,
-    )
-    return stream
-
-
-def is_pod_running(pod: V1PodSpec):
-    client = corev1_client()
-    r = client.read_namespaced_pod(
-        name=pod.metadata.name, namespace=pod.metadata.namespace
-    )
-    pod_is_running = r.status.phase != "Pending"
-    return pod_is_running
-
-
-def corev1_client():
-    config.load_config()
-    core_v1 = CoreV1Api()
-    return core_v1
-
-
-def print_pod_logs(job: V1Job, pod: V1PodSpec):
-    """
-    prints in realtime the logs of a running POD
-    """
-    logs_prefix = "JOB: " + job.metadata.name + " POD: " + pod.metadata.name
-    try:
-        stream = get_pod_log_stream(pod)
-        for i in stream:
-            l = logs_prefix + ": " + i
-            logger.debug(l)
-    except (UnicodeDecodeError, urllib3.exceptions.ProtocolError) as error:
-        logger.debug("Failed to get pod log stream...")
-
-
-class BackgroundJobLogger:
-    """
-    Prints logs of pods associated to a job.
-    Logs get printed in background processes.
-    """
-
-    def __init__(self, job: V1Job):
-        self.job = job
-
-    def _start_logging(self, job: V1Job):
-        pods = get_job_pods(job)
-        processes = [Process(target=print_pod_logs, args=(job, pod)) for pod in pods]
-        for proc in processes:
-            proc.start()
-        return processes
-
-    def __enter__(self):
-        self.printing_procs = self._start_logging(self.job)
-
-    def __exit__(self, exception_type, exception, traceback):
-        if exception is None:
-            for p in self.printing_procs:
-                p.join()
-                p.close()
-        if exception is not None:
-            for p in self.printing_procs:
-                p.kill()
-
-
-def is_pod_waiting_for_scale_up(condition: V1PodCondition) -> bool:
-    """
-    Returns true if a pod is waiting to get scheduled
-    because cluster is scaling up.
-    """
-    if "Unschedulable" not in condition.reason or not condition.message:
-        return False
-    match = re.match(r"(\d)\/(\d) nodes are available.*", condition.message)
-    if match:
-        current_nodes = int(match.group(1))
-        target_nodes = int(match.group(2))
-        if current_nodes <= target_nodes:
-            return True
-        return False
-
-
-def has_scaling_failed(condition: V1PodCondition) -> bool:
-    if (
-        "Unschedulable" in condition.reason
-        and condition.message
-        and "pod didn't trigger scale-up (it wouldn" in condition.message
-    ):
-        return True
-    return False
-
-
-def has_job_started(job: V1Job) -> bool:
-    """
-    Checks if a job has started running.
-    It checks the status of pods associated to a job.
-    Throws exception if any pod in the job fails at startup
-    Throws exception if any pod in the job fails to get scheduled
-    """
-    WAIT_FOR_JOB_CREATION_INTERVAL = 5
-    pods = get_job_pods(job)
-    if not pods:
-        logger.debug(
-            f"JOB: {job.metadata.name} -  No pods found for %s, waiting for cluster state to match the job definition"
-        )
-        logger.debug("waiting for cluster to match job definition")
-        sleep(WAIT_FOR_JOB_CREATION_INTERVAL)
-        pods = get_job_pods(job)
-
-    for pod in pods:
-        logs_prefix = "JOB: " + job.metadata.name + " POD: " + pod.metadata.name
-        if pod.status.container_statuses:
-            for status in pod.status.container_statuses:
-                logger.debug(f"{logs_prefix} container status {status}")
-                if status.state.waiting:
-                    if status.state.waiting.reason != "ContainerCreating":
-                        raise FailedJob(
-                            job=job,
-                            message=f"Job: {job.metadata.name} - Pod: {pod.metadata.name} container has a  weird status : {status}",
-                        )
-                if status.state.terminated:
-                    if status.state.terminated.reason == "Error":
-                        raise FailedJob(
-                            job=job,
-                            message=f"Job: {job.metadata.name} - Pod: {pod.metadata.name} container has run with an error. Please check container logs",
-                        )
-        if pod.status.conditions:
-            for cond in pod.status.conditions:
-                logger.debug(f"{logs_prefix} pod condition {cond}")
-                if cond.reason == "ContainersNotReady":
-                    return False
-                if cond.reason == "Unschedulable":
-                    if is_pod_waiting_for_scale_up(cond):
-                        if has_scaling_failed(cond):
-                            logger.debug(f"{logs_prefix} Cluster could not scale up.")
-                            raise FailedJob(
-                                job=job,
-                                message=f"Job: {job.metadata.name} - Pod: {pod.metadata.name} Failed to scale up : {cond.reason}  {cond.message}",
-                            )
-                        logger.debug(f"{logs_prefix} Waiting for cluster to Scale up..")
-                        return False
-    return True
-
-
-def is_job_completed(k8s_client: ApiClient, job: V1Job):
-    """
-    returns true if a job is completed
-    returns false if a job is still running
-    raises an exception if job reaches a failed state
-    """
-    api_response = k8s_client.read_namespaced_job_status(
-        name=job.metadata.name, namespace=job.metadata.namespace
-    )
-    has_succeded = api_response.status.succeeded is not None
-    has_failed = api_response.status.failed is not None
-    if has_succeded or has_failed:
-        if has_succeded:
-            logger.debug("JOB: " + job.metadata.name + " has succeded")
-            return True
-
-        if has_failed:
-            logger.warning("JOB: " + job.metadata.name + " has failed")
-            raise FailedJob(
-                job,
-                job_status=api_response,
-                message=f"Job {job.metadata.name} has failed",
-            )
-    return False
-
-
 def run_and_track_job(
     k8s_client: ApiClient, job: V1Job, onpodsready: Callable = lambda x: None
 ) -> None:
     """
     Tracks the execution of a job by following its state changes.
     """
-    logger.debug(f"JOB: {job.metadata.name} submitting job")
+    logger.debug(f"Submitting job: {job.metadata.name}")
     api_response = k8s_client.create_namespaced_job(
         body=job, namespace=job.metadata.namespace
     )
-    logger.debug(f"JOB: {job.metadata.name} submitted")
-    logger.debug(f"API response job creation: {api_response}")
-    logger.debug("---Job Definition----")
-    logger.debug(job)
-    logger.debug("---End of Job Definition")
-    job_completed = False
-    with BackgroundJobLogger(job):
-        while not has_job_started(job):
-            sleep(DEFAULT_POLL_INTERVAL)
-            logger.debug(
-                "Waiting for Kubernetes job " + job.metadata.name + " to start"
-            )
 
-        pods = get_job_pods(job)
-        onpodsready(pods)
+    config.load_config()
+    core_api = CoreV1Api()
+    watcher = watch.Watch()
+    stream = watcher.stream(
+        core_api.list_namespaced_event,
+        namespace=job.metadata.namespace,
+        timeout_seconds=0,
+    )
 
-        while not job_completed:
-            job_completed = is_job_completed(k8s_client, job)
-            sleep(DEFAULT_POLL_INTERVAL)
+    print(job.metadata.name)
+
+    for raw_event in stream:
+        rel = raw_event["object"].related
+        name = raw_event["object"].metadata.name
+
+        # Unfortunately I have not found a way to do this filtering with the kubernetes client so we have to do it manually
+        if name.startswith(job.metadata.name):
+
+            reason = raw_event["object"].reason
+            message = raw_event["object"].message
+            logger.info(f"{reason}, {message}")
+
+            if reason == "Completed":
+                return
 
 
 def clean_job_resources(k8s_client: ApiClient, job: V1Job) -> None:
@@ -343,15 +162,6 @@ def clean_job_resources(k8s_client: ApiClient, job: V1Job) -> None:
     delete kubernetes resources associated to a Job
     """
     logger.debug(f"JOB: {job.metadata.name} - Cleaning Job's resources")
-
-    # Try to print pod logs before cleaning up
-    logger.debug("Trying to get Pod logs before cleaning up...")
-    pods = get_job_pods(job)
-    # for pod in pods:
-    #     try:
-    #         print_pod_logs(job, pod)
-    #     except Exception as e:
-    #         logger.warning("no logs for POD: {pod.metadata.name}: {e}")
 
     api_response = k8s_client.delete_namespaced_job(
         name=job.metadata.name,
