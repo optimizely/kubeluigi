@@ -139,24 +139,16 @@ def run_and_track_job(
         namespace=job.metadata.namespace,
         timeout_seconds=0,
     )
+    resource_version = 0
 
     for raw_event in stream:
-        rel = raw_event["object"].related
-        name = raw_event["object"].metadata.name
-        reason = raw_event["object"].reason
-        message = raw_event["object"].message
+        obj = raw_event["object"]
+        rel = obj.related
+        name = obj.metadata.name
+        reason = obj.reason
+        message = obj.message
 
-        # print(reason, message, name)
-        # logger.info(f"{reason}, {message}, {name}")
-
-        # Unfortunately I have not found a way to do this filtering with the kubernetes client so we have to do it manually
         if name.startswith(job.metadata.name):
-
-            reason = raw_event["object"].reason
-            message = raw_event["object"].message
-            involved_object = raw_event["object"].involved_object
-
-            logger.info(f"{reason}, {message}")
 
             if reason == "FailedScheduling" and any(
                 [
@@ -168,11 +160,18 @@ def run_and_track_job(
                 return
 
             if reason == "Started":
-                pod_name = involved_object.name
+                pod_name = obj.name
                 onpodstarted(pod_name)
+
+            if reason == "Error":
+                logger.error(f"Job Failed.")
+                return
 
             if reason == "Completed":
                 return
+
+        else:
+            logger.debug(f"{reason}, {message}, {name}")
 
 
 def clean_job_resources(k8s_client: ApiClient, job: V1Job) -> None:
