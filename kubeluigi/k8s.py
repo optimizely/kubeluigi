@@ -143,6 +143,11 @@ def run_and_track_job(
     for raw_event in stream:
         rel = raw_event["object"].related
         name = raw_event["object"].metadata.name
+        reason = raw_event["object"].reason
+        message = raw_event["object"].message
+
+        # print(reason, message, name)
+        # logger.info(f"{reason}, {message}, {name}")
 
         # Unfortunately I have not found a way to do this filtering with the kubernetes client so we have to do it manually
         if name.startswith(job.metadata.name):
@@ -152,6 +157,15 @@ def run_and_track_job(
             involved_object = raw_event["object"].involved_object
 
             logger.info(f"{reason}, {message}")
+
+            if reason == "FailedScheduling" and any(
+                [
+                    case in message
+                    for case in ["Insufficient cpu", "Insufficient memory"]
+                ]
+            ):
+                logger.error(f"Pod scheduling failed due to lack of resources.")
+                return
 
             if reason == "Started":
                 pod_name = involved_object.name
