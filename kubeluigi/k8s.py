@@ -160,15 +160,6 @@ def run_and_track_job(
 
             logger.info(f"{reason}, {message}, {name}")
 
-            if reason == "FailedScheduling" and any(
-                [
-                    case in message
-                    for case in ["Insufficient cpu", "Insufficient memory"]
-                ]
-            ):
-                logger.error(f"Pod scheduling failed due to lack of resources.")
-                return
-
             if reason == "Started":
                 onpodstarted(involved_object.name)
 
