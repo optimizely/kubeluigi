@@ -128,13 +128,16 @@ def observe_namespace(namespace):
         try:
             watcher = watch.Watch()
             stream = watcher.stream(
-                core_api.list_namespaced_event, namespace=namespace, timeout_seconds=0
+                core_api.list_namespaced_event, namespace=namespace, _request_timeout=60
             )
             for event in stream:
                 yield event
+        except urllib3.exceptions.ReadTimeoutError:
+            logger.warning("Refreshing watcher connection due to long silence.")
+            sleep(1)
         except urllib3.exceptions.ProtocolError:
-            logger.warning("observe_cluster ProtocolError, continuing..")
-            sleep(5)
+            logger.warning("Refreshing watcher connection due to ProtocolError.")
+            sleep(1)
 
 
 def run_and_track_job(
@@ -168,6 +171,10 @@ def run_and_track_job(
                 return
 
             if reason == "Completed":
+                return
+
+            if reason == "BackoffLimitExceeded":
+                logger.error(f"Job Failed.")
                 return
 
         else:
