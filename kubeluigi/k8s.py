@@ -120,6 +120,23 @@ def job_definition(
     return job
 
 
+def observe_namespace(namespace):
+    config.load_config()
+    core_api = CoreV1Api()
+
+    while True:  # haha i know, we cant avoid these fuckin while loops.
+        try:
+            watcher = watch.Watch()
+            stream = watcher.stream(
+                core_api.list_namespaced_event, namespace=namespace, timeout_seconds=0
+            )
+            for event in stream:
+                yield event
+        except urllib3.exceptions.ProtocolError:
+            logger.warning("observe_cluster ProtocolError, continuing..")
+            sleep(5)
+
+
 def run_and_track_job(
     k8s_client: ApiClient, job: V1Job, onpodstarted: Callable = lambda x: None
 ) -> None:
@@ -131,24 +148,17 @@ def run_and_track_job(
         body=job, namespace=job.metadata.namespace
     )
 
-    config.load_config()
-    core_api = CoreV1Api()
-    watcher = watch.Watch()
-    stream = watcher.stream(
-        core_api.list_namespaced_event,
-        namespace=job.metadata.namespace,
-        timeout_seconds=0,
-    )
-    resource_version = 0
-
-    for raw_event in stream:
+    for raw_event in observe_namespace(job.metadata.namespace):
         obj = raw_event["object"]
         rel = obj.related
         name = obj.metadata.name
         reason = obj.reason
         message = obj.message
+        involved_object = obj.involved_object
 
         if name.startswith(job.metadata.name):
+
+            logger.info(f"{reason}, {message}, {name}")
 
             if reason == "FailedScheduling" and any(
                 [
@@ -160,8 +170,7 @@ def run_and_track_job(
                 return
 
             if reason == "Started":
-                pod_name = obj.name
-                onpodstarted(pod_name)
+                onpodstarted(involved_object.name)
 
             if reason == "Error":
                 logger.error(f"Job Failed.")
