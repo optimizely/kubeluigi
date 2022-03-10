@@ -36,14 +36,6 @@ logger = logging.getLogger(__name__)
 DEFAULT_POLL_INTERVAL = 30
 
 
-class FailedJob(Exception):
-    def __init__(self, job, message, job_status=None):
-        self.job = job
-        self.job_status = job_status
-        self.message = message
-        super().__init__(self.message)
-
-
 def kubernetes_client() -> BatchV1Api:
     """
     returns a kubernetes client
@@ -95,7 +87,6 @@ def get_container_with_volume_mounts(container):
 
 def job_definition(
     job_name: str,
-    job_uuid: str,
     backoff_limit: int,
     pod_template_spec: V1PodTemplateSpec,
     labels: Dict[str, str],
@@ -104,40 +95,69 @@ def job_definition(
     """
     returns a job object describing a k8s job.
     """
-    # Create the specification of deployment
-    spec = V1JobSpec(template=pod_template_spec, backoff_limit=backoff_limit)
-
-    # Instantiate the job object
-    labels.update({"spawned_by": "luigi", "luigi_task_id": job_uuid})
+    labels.update({"spawned_by": "luigi"})
 
     job = V1Job(
         api_version="batch/v1",
         kind="Job",
         metadata=V1ObjectMeta(name=job_name, labels=labels, namespace=namespace),
-        spec=spec,
+        spec=V1JobSpec(template=pod_template_spec, backoff_limit=backoff_limit),
     )
 
     return job
 
 
-def observe_namespace(namespace):
-    config.load_config()
-    core_api = CoreV1Api()
+def kick_off_job(k8s_client: ApiClient, job: V1Job) -> V1Job:
+    logger.debug(f"Submitting job: {job.metadata.name}")
 
-    while True:  # haha i know, we cant avoid these fuckin while loops.
-        try:
-            watcher = watch.Watch()
-            stream = watcher.stream(
-                core_api.list_namespaced_event, namespace=namespace, _request_timeout=60
+    try:
+        job = k8s_client.create_namespaced_job(
+            body=job, namespace=job.metadata.namespace
+        )
+    except ApiException as e:
+        if e.reason == "Conflict":
+            logger.info(
+                "The job you tried to start is already running. We will try to track it."
             )
-            for event in stream:
-                yield event
-        except urllib3.exceptions.ReadTimeoutError:
-            logger.warning("Refreshing watcher connection due to long silence.")
-            sleep(1)
-        except urllib3.exceptions.ProtocolError:
-            logger.warning("Refreshing watcher connection due to ProtocolError.")
-            sleep(1)
+            job = k8s_client.read_namespaced_job(
+                job.metadata.name, job.metadata.namespace
+            )
+        else:
+            raise e
+
+    return job
+
+
+def has_scaling_failed(condition: V1PodCondition) -> bool:
+    if (
+        "Unschedulable" in condition.reason
+        and condition.message
+        and "pod didn't trigger scale-up (it wouldn" in condition.message
+    ):
+        return True
+    return False
+
+
+def get_job_pods(job) -> List[V1Pod]:
+    """
+    get the pods associated with a kubernetes Job
+    """
+    core_v1 = CoreV1Api()
+    label_selector = "job-name=" + job.metadata.name
+    return core_v1.list_namespaced_pod(
+        job.metadata.namespace, label_selector=label_selector
+    ).items
+
+
+def job_state_stream(job):
+    while True:
+        sleep(10)
+        pods = get_job_pods(job)
+        if not pods:
+            yield "WAITING_FOR_PODS"
+        else:
+            for pod in pods:
+                yield pod.status.phase
 
 
 def run_and_track_job(
@@ -147,38 +167,16 @@ def run_and_track_job(
     Tracks the execution of a job by following its state changes.
     """
     logger.debug(f"Submitting job: {job.metadata.name}")
-    api_response = k8s_client.create_namespaced_job(
-        body=job, namespace=job.metadata.namespace
-    )
+    job = kick_off_job(k8s_client, job)
 
-    for raw_event in observe_namespace(job.metadata.namespace):
-        obj = raw_event["object"]
-        rel = obj.related
-        name = obj.metadata.name
-        reason = obj.reason
-        message = obj.message
-        involved_object = obj.involved_object
+    for state in job_state_stream(job):
+        logger.debug(state)
 
-        if name.startswith(job.metadata.name):
+        if state == "Failed":
+            raise Exception("Task Failed!")
 
-            logger.info(f"{reason}, {message}, {name}")
-
-            if reason == "Started":
-                onpodstarted(involved_object.name)
-
-            if reason == "Error":
-                logger.error(f"Job Failed.")
-                return
-
-            if reason == "Completed":
-                return
-
-            if reason == "BackoffLimitExceeded":
-                logger.error(f"Job Failed.")
-                return
-
-        else:
-            logger.debug(f"{reason}, {message}, {name}")
+        if state == "Succeeded":
+            return
 
 
 def clean_job_resources(k8s_client: ApiClient, job: V1Job) -> None:

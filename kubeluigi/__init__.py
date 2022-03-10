@@ -19,13 +19,7 @@ logger = logging.getLogger(__name__)
 
 class KubernetesJobTask:
     def _init_task_metadata(self):
-        self.job_uuid = str(uuid.uuid4().hex)
-        now = datetime.utcnow()
-        self.uu_name = "%s-%s-%s" % (
-            self.name,
-            now.strftime("%Y%m%d%H%M%S"),
-            self.job_uuid[:16],
-        )
+        self.uu_name = self.name
 
     def _init_kubernetes(self):
         # self.__logger = logger
@@ -60,8 +54,8 @@ class KubernetesJobTask:
     @property
     def name(self):
         """
-        A name for this job. This task will automatically append a UUID to the
-        name before to submit to Kubernetes.
+        A name for this job. This needs to be unique otherwise it will fail if another job
+        with the same name is running.
         """
         raise NotImplementedError("subclass must define name")
 
@@ -98,7 +92,6 @@ class KubernetesJobTask:
 
         job = job_definition(
             job_name=self.uu_name,
-            job_uuid=self.job_uuid,
             backoff_limit=self.backoff_limit,
             pod_template_spec=pod_template_spec,
             labels=self.labels,
@@ -122,8 +115,8 @@ class KubernetesJobTask:
         try:
             run_and_track_job(self.kubernetes_client, job, self.onpodstarted)
         except Exception as e:
-            logger.exception("Luigi has failed to submit the job, starting cleaning")
-            logger.exception(e)
+            logger.error("Luigi has failed to submit the job, starting cleaning")
+            logger.error(e)
             raise e
         finally:
             clean_job_resources(self.kubernetes_client, job)
