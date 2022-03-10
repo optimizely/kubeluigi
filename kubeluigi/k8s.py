@@ -155,31 +155,14 @@ def job_state_stream(job):
         sleep(10)
         pods = get_job_pods(job)
 
-        if not pods:
-            state = "WAITING_FOR_PODS"
-        else:
-            for pod in pods:
-                state = pod.status.phase
-
-        if state != previous_state:
-            yield state
-            previous_state = state
-
-
-def run_and_track_job(
-    k8s_client: ApiClient, job: V1Job, onpodstarted: Callable = lambda x: None
-) -> None:
-    """
-    Tracks the execution of a job by following its state changes.
-    """
-    logger.debug(f"Submitting job: {job.metadata.name}")
-    job = kick_off_job(k8s_client, job)
 
     for state in job_state_stream(job):
         logger.debug(f"Task {job.metadata.name} state is {state}")
 
         if state == "Failed":
-            raise Exception("Task Failed!")
+            raise FailedJob(job,
+                            job_status=reason,
+                            message=message)
 
         if state == "Succeeded":
             return

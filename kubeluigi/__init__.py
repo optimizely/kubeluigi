@@ -99,8 +99,8 @@ class KubernetesJobTask:
         )
         return job
 
-    def onpodstarted(self):
-        pass
+    def onpodstarted(self, pod):
+        logger.info(f"Tail the Pod logs using: kubectl logs -f -n {pod.namespace} {pod.name}")
 
     def as_yaml(self):
         job = self.build_job_definition()
