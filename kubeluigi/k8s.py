@@ -108,7 +108,6 @@ def job_definition(
 
 
 def kick_off_job(k8s_client: ApiClient, job: V1Job) -> V1Job:
-    logger.debug(f"Submitting job: {job.metadata.name}")
 
     try:
         job = k8s_client.create_namespaced_job(
@@ -150,14 +149,21 @@ def get_job_pods(job) -> List[V1Pod]:
 
 
 def job_state_stream(job):
+    previous_state = "WAITING_FOR_PODS"
+
     while True:
         sleep(10)
         pods = get_job_pods(job)
+
         if not pods:
-            yield "WAITING_FOR_PODS"
+            state = "WAITING_FOR_PODS"
         else:
             for pod in pods:
-                yield pod.status.phase
+                state = pod.status.phase
+
+        if state != previous_state:
+            yield state
+            previous_state = state
 
 
 def run_and_track_job(
@@ -170,7 +176,7 @@ def run_and_track_job(
     job = kick_off_job(k8s_client, job)
 
     for state in job_state_stream(job):
-        logger.debug(state)
+        logger.debug(f"Task {job.metadata.name} state is {state}")
 
         if state == "Failed":
             raise Exception("Task Failed!")
@@ -196,7 +202,7 @@ def clean_job_resources(k8s_client: ApiClient, job: V1Job) -> None:
             f"Error while cleaning job: {job.metadata.name} : {api_response}"
         )
         raise Exception(f"error cleaning job: {job.metadata.name} : {api_response}")
-    logger.debug(f"JOB: {job.metadata.name} -  Finished cleaning Job's resources")
+    logger.info(f"JOB: {job.metadata.name} -  Finished cleaning Job's resources")
 
 
 def attach_volume_to_spec(pod_spec, volume):
