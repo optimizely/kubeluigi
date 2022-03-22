@@ -36,6 +36,13 @@ logger = logging.getLogger(__name__)
 DEFAULT_POLL_INTERVAL = 30
 
 
+class FailedJob(Exception):
+    def __init__(self, job, message, job_status=None):
+        self.job = job
+        self.job_status = job_status
+        self.message = message
+        super().__init__(self.message)
+
 def kubernetes_client() -> BatchV1Api:
     """
     returns a kubernetes client
@@ -155,14 +162,32 @@ def job_state_stream(job):
         sleep(10)
         pods = get_job_pods(job)
 
+        if not pods:
+            state = "WAITING_FOR_PODS"
+        else:
+            for pod in pods:
+                state = pod.status.phase
 
+        if state != previous_state:
+            yield state
+            previous_state = state
+
+            
+def run_and_track_job(
+    k8s_client: ApiClient, job: V1Job, onpodstarted: Callable = lambda x: None
+) -> None:
+    """
+    Tracks the execution of a job by following its state changes.
+    """
+    logger.debug(f"Submitting job: {job.metadata.name}")
+    job = kick_off_job(k8s_client, job)
     for state in job_state_stream(job):
         logger.debug(f"Task {job.metadata.name} state is {state}")
 
         if state == "Failed":
             raise FailedJob(job,
-                            job_status=reason,
-                            message=message)
+                            job_status="whtever",
+                            message="whatever")
 
         if state == "Succeeded":
             return
