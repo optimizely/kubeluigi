@@ -2,15 +2,10 @@ from kubernetes.client.models.v1_host_path_volume_source import V1HostPathVolume
 from kubernetes.client.models.v1_volume import V1Volume
 from kubernetes.client.models.v1_volume_mount import V1VolumeMount
 from kubeluigi.k8s import (
-    has_scaling_failed,
     pod_spec_from_dict,
     job_definition,
-    print_pod_logs,
-    is_pod_waiting_for_scale_up,
-    has_job_started,
     FailedJob,
     run_and_track_job,
-    BackgroundJobLogger,
     get_container_with_volume_mounts,
     attach_volume_to_spec
 )
