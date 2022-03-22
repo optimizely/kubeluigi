@@ -52,7 +52,8 @@ def kubernetes_client() -> BatchV1Api:
 
 
 def pod_spec_from_dict(
-    name, spec_schema, restartPolicy="Never", labels={}
+        name, spec_schema, restartPolicy="Never", labels={},
+        share_process_namespace=True
 ) -> V1PodTemplateSpec:
     """
     returns a pod template spec from a dictionary describing a pod
@@ -71,7 +72,8 @@ def pod_spec_from_dict(
     pod_template = V1PodTemplateSpec(
         metadata=V1ObjectMeta(name=name, labels=labels),
         spec=V1PodSpec(
-            restart_policy=restartPolicy, containers=containers, volumes=volumes
+            restart_policy=restartPolicy, containers=containers, volumes=volumes,
+            share_process_namespace=share_process_namespace
         ),
     )
     return pod_template
@@ -115,7 +117,6 @@ def job_definition(
 
 
 def kick_off_job(k8s_client: ApiClient, job: V1Job) -> V1Job:
-
     try:
         job = k8s_client.create_namespaced_job(
             body=job, namespace=job.metadata.namespace
@@ -217,10 +218,11 @@ def attach_volume_to_spec(pod_spec, volume):
     volume_spec = volume.pod_volume_spec()
     volume_mnt_spec = volume.pod_mount_spec()
     # updating volume_mounts
-    mounted_volumes = pod_spec["containers"][0].get("volume_mounts", [])
-    pod_spec["containers"][0]["volume_mounts"] = (
-        mounted_volumes + volume_mnt_spec["volume_mounts"]
-    )
+    for container in pod_spec["containers"]:
+        mounted_volumes = container.get("volume_mounts", [])
+        container["volume_mounts"] = (
+            mounted_volumes + volume_mnt_spec["volume_mounts"]
+        )
 
     # updating volumes
     current_volumes = pod_spec.get("volumes", [])
