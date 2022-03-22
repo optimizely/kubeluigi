@@ -117,6 +117,35 @@ def job_definition(
 
 
 def kick_off_job(k8s_client: ApiClient, job: V1Job) -> V1Job:
+    try:
+        job = k8s_client.create_namespaced_job(
+            body=job, namespace=job.metadata.namespace
+        )
+    except ApiException as e:
+        if e.reason == "Conflict":
+            logger.info(
+                "The job you tried to start is already running. We will try to track it."
+            )
+            job = k8s_client.read_namespaced_job(
+                job.metadata.name, job.metadata.namespace
+            )
+        else:
+            raise e
+
+    return job
+
+
+def has_scaling_failed(condition: V1PodCondition) -> bool:
+    if (
+        "Unschedulable" in condition.reason
+        and condition.message
+        and "pod didn't trigger scale-up (it wouldn" in condition.message
+    ):
+        return True
+    return False
+
+
+def get_job_pods(job) -> List[V1Pod]:
     """
     get the pods associated with a kubernetes Job
     """
