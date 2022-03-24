@@ -1,6 +1,4 @@
-from datetime import datetime
 import logging
-import uuid
 import yaml
 
 from kubeluigi.k8s import (
@@ -11,8 +9,8 @@ from kubeluigi.k8s import (
     kubernetes_client,
     attach_volume_to_spec,
 )
-
 from kubernetes.client import ApiClient
+
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +20,6 @@ class KubernetesJobTask:
         self.uu_name = self.name
 
     def _init_kubernetes(self):
-        # self.__logger = logger
         self.kubernetes_client = kubernetes_client()
 
     @property

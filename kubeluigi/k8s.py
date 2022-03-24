@@ -1,16 +1,10 @@
-from multiprocessing import Process
-from typing import Dict, Generator, List, Callable
+from typing import Dict, List, Callable
 import logging
-import re
 from time import sleep
-import gzip
-import zlib
 from base64 import b64encode
 from urllib.parse import quote
-import urllib3
-import sys
 
-from kubernetes import config, watch
+from kubernetes import config
 from kubernetes.client import (
     V1PodSpec,
     V1ObjectMeta,
@@ -24,11 +18,9 @@ from kubernetes.client import (
     V1PodCondition,
     V1Volume,
     V1VolumeMount,
-    V1HostPathVolumeSource,
 )
 from kubernetes.client.api.core_v1_api import CoreV1Api
 from kubernetes.client.api_client import ApiClient
-from kubernetes.client.configuration import Configuration
 from kubernetes.client.exceptions import ApiException
 
 logger = logging.getLogger(__name__)
@@ -173,7 +165,7 @@ def job_state_stream(job):
             yield state
             previous_state = state
 
-            
+
 def run_and_track_job(
     k8s_client: ApiClient, job: V1Job, onpodstarted: Callable = lambda x: None
 ) -> None:
@@ -185,10 +177,12 @@ def run_and_track_job(
     for state in job_state_stream(job):
         logger.debug(f"Task {job.metadata.name} state is {state}")
 
+        if state == "Running":
+            pods = get_job_pods(job)
+            onpodstarted(pods[0])
+
         if state == "Failed":
-            raise FailedJob(job,
-                            job_status="whtever",
-                            message="whatever")
+            raise FailedJob(job, job_status="whtever", message="whatever")
 
         if state == "Succeeded":
             return
