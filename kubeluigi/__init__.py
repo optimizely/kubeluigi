@@ -8,6 +8,7 @@ from kubeluigi.k8s import (
     run_and_track_job,
     kubernetes_client,
     attach_volume_to_spec,
+    FailedJob
 )
 from kubernetes.client import ApiClient
 
@@ -111,8 +112,10 @@ class KubernetesJobTask:
         logger.debug("Submitting Kubernetes Job: " + self.uu_name)
         try:
             run_and_track_job(self.kubernetes_client, job, self.onpodstarted)
+        except FailedJob as e:
+            logger.exception(f"Luigi's job has failed running: {e.job.metadata.name}, {e.pod.status.message}")
         except Exception:
-            logger.exception("Luigi has failed to submit the job, starting cleaning")
+            logger.exception(f"Luigi has failed to run: {job}, starting cleaning")
         finally:
             clean_job_resources(self.kubernetes_client, job)
 

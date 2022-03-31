@@ -155,9 +155,9 @@ def job_phase_stream(job):
         sleep(10)
         pods = get_job_pods(job)
         for pod in pods:
-            if previous_phase.get(pod.name, None) != pod.status.phase:
+            if previous_phase.get(pod.metadata.name, None) != pod.status.phase:
                 yield pod.status.phase, pod
-            previous_phase[pod.name] = pod.status.phase
+            previous_phase[pod.metadata.name] = pod.status.phase
 
 
 def are_all_pods_successful(job):
