@@ -111,10 +111,8 @@ class KubernetesJobTask:
         logger.debug("Submitting Kubernetes Job: " + self.uu_name)
         try:
             run_and_track_job(self.kubernetes_client, job, self.onpodstarted)
-        except Exception as e:
-            logger.error("Luigi has failed to submit the job, starting cleaning")
-            logger.error(e)
-            raise e
+        except Exception:
+            logger.exception("Luigi has failed to submit the job, starting cleaning")
         finally:
             clean_job_resources(self.kubernetes_client, job)
 

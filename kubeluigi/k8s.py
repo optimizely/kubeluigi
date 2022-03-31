@@ -29,11 +29,12 @@ DEFAULT_POLL_INTERVAL = 30
 
 
 class FailedJob(Exception):
-    def __init__(self, job, message, job_status=None):
+    def __init__(self, job, pod, message):
         self.job = job
-        self.job_status = job_status
+        self.pod = pod
         self.message = message
         super().__init__(self.message)
+
 
 def kubernetes_client() -> BatchV1Api:
     """
@@ -115,7 +116,7 @@ def kick_off_job(k8s_client: ApiClient, job: V1Job) -> V1Job:
         )
     except ApiException as e:
         if e.reason == "Conflict":
-            logger.info(
+            logger.warning(
                 "The job you tried to start is already running. We will try to track it."
             )
             job = k8s_client.read_namespaced_job(
@@ -148,22 +149,20 @@ def get_job_pods(job) -> List[V1Pod]:
     ).items
 
 
-def job_state_stream(job):
-    previous_state = "WAITING_FOR_PODS"
-
+def job_phase_stream(job):
+    previous_phase = {}
     while True:
         sleep(10)
         pods = get_job_pods(job)
+        for pod in pods:
+            if previous_phase.get(pod.name, None) != pod.status.phase:
+                yield pod.status.phase, pod
+            previous_phase[pod.name] = pod.status.phase
 
-        if not pods:
-            state = "WAITING_FOR_PODS"
-        else:
-            for pod in pods:
-                state = pod.status.phase
 
-        if state != previous_state:
-            yield state
-            previous_state = state
+def are_all_pods_successful(job):
+    pods = get_job_pods(job)
+    return all([pods.status.phase == "Succeeded" for pod in pods])
 
 
 def run_and_track_job(
@@ -174,17 +173,18 @@ def run_and_track_job(
     """
     logger.debug(f"Submitting job: {job.metadata.name}")
     job = kick_off_job(k8s_client, job)
-    for state in job_state_stream(job):
-        logger.debug(f"Task {job.metadata.name} state is {state}")
+    for phase, pod in job_phase_stream(job):
+        logger.debug(f"Task {job.metadata.name} state is {phase}")
 
-        if state == "Running":
-            pods = get_job_pods(job)
-            onpodstarted(pods[0])
+        # ToDo: Check if we handle : Scale up but not enough resources
+        # Warning: Running onpodstarted is not guaranteed to execute all times..
+        if phase == "Running":
+            onpodstarted(pod)
 
-        if state == "Failed":
-            raise FailedJob(job, job_status="whtever", message="whatever")
+        if phase == "Failed":
+            raise FailedJob(job, pod, "Failed pod in Job")
 
-        if state == "Succeeded":
+        if phase == "Succeeded" and are_all_pods_successful(job):
             return
 
 
