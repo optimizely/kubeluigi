@@ -25,7 +25,7 @@ from kubernetes.client.exceptions import ApiException
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_POLL_INTERVAL = 30
+DEFAULT_POLL_INTERVAL = 15
 
 
 class FailedJob(Exception):
@@ -45,8 +45,10 @@ def kubernetes_client() -> BatchV1Api:
 
 
 def pod_spec_from_dict(
-        name, spec_schema, restartPolicy="Never", labels={},
-        share_process_namespace=True
+        name, spec_schema,
+        labels={},
+        restartPolicy="Never",
+        **kwargs
 ) -> V1PodTemplateSpec:
     """
     returns a pod template spec from a dictionary describing a pod
@@ -65,8 +67,9 @@ def pod_spec_from_dict(
     pod_template = V1PodTemplateSpec(
         metadata=V1ObjectMeta(name=name, labels=labels),
         spec=V1PodSpec(
-            restart_policy=restartPolicy, containers=containers, volumes=volumes,
-            share_process_namespace=share_process_namespace
+            restart_policy=restartPolicy, containers=containers,
+            volumes=volumes,
+            **kwargs
         ),
     )
     return pod_template
@@ -152,7 +155,7 @@ def get_job_pods(job) -> List[V1Pod]:
 def job_phase_stream(job):
     previous_phase = {}
     while True:
-        sleep(10)
+        sleep(DEFAULT_POLL_INTERVAL)
         pods = get_job_pods(job)
         for pod in pods:
             if previous_phase.get(pod.metadata.name, None) != pod.status.phase:
@@ -162,7 +165,7 @@ def job_phase_stream(job):
 
 def are_all_pods_successful(job):
     pods = get_job_pods(job)
-    return all([pods.status.phase == "Succeeded" for pod in pods])
+    return all([pod.status.phase == "Succeeded" for pod in pods])
 
 
 def run_and_track_job(

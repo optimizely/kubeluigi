@@ -28,13 +28,6 @@ class KubernetesJobTask:
         return "Never"
 
     @property
-    def delete_on_success(self):
-        """
-        Delete the Kubernetes workload if the job has ended successfully.
-        """
-        return True
-
-    @property
     def backoff_limit(self):
         """
         Maximum number of retries before considering the job as failed.
@@ -85,7 +78,7 @@ class KubernetesJobTask:
         schema = self.spec_schema()
         schema_with_volumes = self._attach_volumes_to_spec(schema)
         pod_template_spec = pod_spec_from_dict(
-            self.uu_name, schema_with_volumes, self.restart_policy, self.labels
+            self.uu_name, schema_with_volumes, self.labels, self.restart_policy
         )
 
         job = job_definition(
@@ -114,8 +107,10 @@ class KubernetesJobTask:
             run_and_track_job(self.kubernetes_client, job, self.onpodstarted)
         except FailedJob as e:
             logger.exception(f"Luigi's job has failed running: {e.job.metadata.name}, {e.pod.status.message}")
+            raise
         except Exception:
             logger.exception(f"Luigi has failed to run: {job}, starting cleaning")
+            raise
         finally:
             clean_job_resources(self.kubernetes_client, job)
 
