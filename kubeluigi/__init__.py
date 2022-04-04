@@ -1,4 +1,5 @@
 import logging
+from typing import List
 import yaml
 
 from kubeluigi.k8s import (
@@ -8,15 +9,22 @@ from kubeluigi.k8s import (
     run_and_track_job,
     kubernetes_client,
     attach_volume_to_spec,
-    FailedJob
+    FailedJob,
 )
-from kubernetes.client import ApiClient
 
+from kubeluigi.volumes import AttachableVolume
+
+from kubernetes.client import ApiClient
+from kubernetes.client.models.v1_job import V1Job
+from kubernetes.client.models.v1_pod_spec import V1PodSpec
 
 logger = logging.getLogger(__name__)
 
 
 class KubernetesJobTask:
+
+    volumes: List[AttachableVolume] = []
+
     def _init_task_metadata(self):
         self.uu_name = self.name
 
@@ -36,13 +44,6 @@ class KubernetesJobTask:
         return 6
 
     @property
-    def delete_on_success(self):
-        """
-        Delete the Kubernetes workload if the job has ended successfully.
-        """
-        return True
-
-    @property
     def name(self):
         """
         A name for this job. This needs to be unique otherwise it will fail if another job
@@ -59,7 +60,7 @@ class KubernetesJobTask:
         """
         return {}
 
-    def spec_schema(self):
+    def spec_schema(self) -> V1PodSpec:
         """
         Kubernetes Job spec schema in JSON format, an example follows.
         .. code-block:: javascript
@@ -73,7 +74,7 @@ class KubernetesJobTask:
         """
         raise NotImplementedError("subclass must define spec_schema")
 
-    def build_job_definition(self):
+    def build_job_definition(self) -> V1Job:
         self._init_task_metadata()
         schema = self.spec_schema()
         schema_with_volumes = self._attach_volumes_to_spec(schema)
@@ -91,7 +92,9 @@ class KubernetesJobTask:
         return job
 
     def onpodstarted(self, pod):
-        logger.info(f"Tail the Pod logs using: kubectl logs -f -n {pod.namespace} {pod.name}")
+        logger.info(
+            f"Tail the Pod logs using: kubectl logs -f -n {pod.namespace} {pod.name}"
+        )
 
     def as_yaml(self):
         job = self.build_job_definition()
@@ -106,7 +109,9 @@ class KubernetesJobTask:
         try:
             run_and_track_job(self.kubernetes_client, job, self.onpodstarted)
         except FailedJob as e:
-            logger.exception(f"Luigi's job has failed running: {e.job.metadata.name}, {e.pod.status.message}")
+            logger.exception(
+                f"Luigi's job has failed running: {e.job.metadata.name}, {e.pod.status.message}"
+            )
             raise
         except Exception:
             logger.exception(f"Luigi has failed to run: {job}, starting cleaning")
@@ -131,3 +136,9 @@ class KubernetesJobTask:
             for volume in self.volumes:
                 spec_schema = attach_volume_to_spec(spec_schema, volume)
         return spec_schema
+
+    def add_volume(self, volume):
+        """
+        adds a volume to the task
+        """
+        return self.volumes.append(volume)

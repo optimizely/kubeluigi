@@ -45,10 +45,7 @@ def kubernetes_client() -> BatchV1Api:
 
 
 def pod_spec_from_dict(
-        name, spec_schema,
-        labels={},
-        restartPolicy="Never",
-        **kwargs
+    name, spec_schema, labels={}, restartPolicy="Never", **kwargs
 ) -> V1PodTemplateSpec:
     """
     returns a pod template spec from a dictionary describing a pod
@@ -67,9 +64,10 @@ def pod_spec_from_dict(
     pod_template = V1PodTemplateSpec(
         metadata=V1ObjectMeta(name=name, labels=labels),
         spec=V1PodSpec(
-            restart_policy=restartPolicy, containers=containers,
+            restart_policy=restartPolicy,
+            containers=containers,
             volumes=volumes,
-            **kwargs
+            **kwargs,
         ),
     )
     return pod_template
@@ -217,9 +215,7 @@ def attach_volume_to_spec(pod_spec, volume):
     # updating volume_mounts
     for container in pod_spec["containers"]:
         mounted_volumes = container.get("volume_mounts", [])
-        container["volume_mounts"] = (
-            mounted_volumes + volume_mnt_spec["volume_mounts"]
-        )
+        container["volume_mounts"] = mounted_volumes + volume_mnt_spec["volume_mounts"]
 
     # updating volumes
     current_volumes = pod_spec.get("volumes", [])

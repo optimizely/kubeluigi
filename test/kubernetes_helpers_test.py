@@ -2,16 +2,18 @@ from kubernetes.client.models.v1_host_path_volume_source import V1HostPathVolume
 from kubernetes.client.models.v1_volume import V1Volume
 from kubernetes.client.models.v1_volume_mount import V1VolumeMount
 from kubeluigi.k8s import (
+    kick_off_job,
     pod_spec_from_dict,
     job_definition,
     FailedJob,
     run_and_track_job,
     get_container_with_volume_mounts,
     attach_volume_to_spec,
-    job_phase_stream
+    job_phase_stream,
 )
 
 from kubernetes.client import V1Pod, V1PodCondition
+from kubernetes.client.exceptions import ApiException
 
 from mock import patch, MagicMock, PropertyMock
 import pytest
@@ -76,35 +78,42 @@ dummy_pod_spec_with_volume = {
 def test_pod_spec_with_volume_from_dict():
 
     labels = {"l1": "label1"}
-    pod_spec = pod_spec_from_dict("name_of_pod", dummy_pod_spec_with_volume, labels=labels)
+    pod_spec = pod_spec_from_dict(
+        "name_of_pod", dummy_pod_spec_with_volume, labels=labels
+    )
 
     assert pod_spec.metadata.name == "name_of_pod"
     assert pod_spec.metadata.labels == labels
     assert pod_spec.spec.restart_policy == "Never"
     assert pod_spec.spec.volumes == [
-        V1Volume(**dummy_pod_spec_with_volume['volumes'][0])
+        V1Volume(**dummy_pod_spec_with_volume["volumes"][0])
     ]
     container = pod_spec.spec.containers[0]
     assert container.name == dummy_pod_spec_with_volume["containers"][0]["name"]
     assert container.image == dummy_pod_spec_with_volume["containers"][0]["image"]
     assert container.env == dummy_pod_spec_with_volume["containers"][0]["env"]
-    assert container.volume_mounts == [V1VolumeMount(mount_path="VmountPath", name="Vname")]
+    assert container.volume_mounts == [
+        V1VolumeMount(mount_path="VmountPath", name="Vname")
+    ]
 
 
 dummy_container = {
-            "name": "container_name",
-            "image": "my_image",
-            "args": ["my_arg"],
-            "imagePullPolicy": "Always",
-            "env": [{"name": "my_env", "value": "env"}],
-            "volume_mounts":[
-                {"name": "Vname", "mountPath": "VmountPath", "host_path": "VhostPath"}
-            ]
-        }
+    "name": "container_name",
+    "image": "my_image",
+    "args": ["my_arg"],
+    "imagePullPolicy": "Always",
+    "env": [{"name": "my_env", "value": "env"}],
+    "volume_mounts": [
+        {"name": "Vname", "mountPath": "VmountPath", "host_path": "VhostPath"}
+    ],
+}
+
 
 def test_get_container_with_volume_mounts():
     container = get_container_with_volume_mounts(dummy_container)
-    assert container['volume_mounts'] == [V1VolumeMount(mount_path="VmountPath", name="Vname")]
+    assert container["volume_mounts"] == [
+        V1VolumeMount(mount_path="VmountPath", name="Vname")
+    ]
 
 
 def test_job_definition():
@@ -135,14 +144,14 @@ def test_job_phase_stream(mocked_get_job_pods):
     pod.status.phase = "Running"
     mocked_get_job_pods.return_value = [pod]
     phase, pod_with_changed_state = next(job_phase_stream(job))
-    assert(phase == "Running")
-    assert(pod.metadata.name == pod_with_changed_state.metadata.name)
+    assert phase == "Running"
+    assert pod.metadata.name == pod_with_changed_state.metadata.name
 
     pod.status.phase = "Succeeded"
     mocked_get_job_pods.return_value = [pod]
     phase, pod_with_changed_state = next(job_phase_stream(job))
-    assert(phase == "Succeeded")
-    assert(pod.metadata.name == pod_with_changed_state.metadata.name)
+    assert phase == "Succeeded"
+    assert pod.metadata.name == pod_with_changed_state.metadata.name
 
 
 @patch("kubeluigi.k8s.get_job_pods")
@@ -160,8 +169,9 @@ def test_run_and_track_job_failure(mocked_get_job_pods):
     mocked_get_job_pods.return_value = [pod]
     with pytest.raises(FailedJob) as e:
         run_and_track_job(client, job, lambda x: x)
-        assert (e.job == job)
-        assert(e.pod.metadata.name == pod.metadata.name)
+        assert e.job == job
+        assert e.pod.metadata.name == pod.metadata.name
+
 
 @patch("kubeluigi.k8s.get_job_pods")
 @patch("kubeluigi.k8s.DEFAULT_POLL_INTERVAL", 0)
@@ -176,4 +186,16 @@ def test_run_and_track_job_success(mocked_get_job_pods):
     pod.status = MagicMock()
     pod.status.phase = "Succeeded"
     mocked_get_job_pods.return_value = [pod]
-    assert(run_and_track_job(client, job, lambda x: x) is None)
+    assert run_and_track_job(client, job, lambda x: x) is None
+
+
+def test_kick_off_job():
+    client = MagicMock()
+    labels = {"l1": "label1"}
+    pod = pod_spec_from_dict("name_of_pod", dummy_pod_spec, labels=labels)
+    job = job_definition("my_job", 100, pod, labels, "my_namespace")
+    kick_off_job(client, job)
+
+    client.create_namespaced_job.assert_called_with(
+        body=job, namespace=job.metadata.namespace
+    )
