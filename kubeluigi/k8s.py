@@ -45,31 +45,41 @@ def kubernetes_client() -> BatchV1Api:
 
 
 def pod_spec_from_dict(
-    name, spec_schema, labels={}, restartPolicy="Never", **kwargs
+    name, spec_schema, labels={}, restart_policy="Never", **kwargs
 ) -> V1PodTemplateSpec:
     """
     returns a pod template spec from a dictionary describing a pod
     """
+
     containers = []
     volumes = []
+
+    spec = dict(spec_schema)
+
     for container in spec_schema["containers"]:
+
         if "imagePullPolicy" in container:
             container["image_pull_policy"] = container.pop("imagePullPolicy")
+
         if "volume_mounts" in container and container["volume_mounts"]:
             container = get_container_with_volume_mounts(container)
+
         containers.append(V1Container(**container))
+
     if "volumes" in spec_schema:
         for volume in spec_schema["volumes"]:
             volumes.append(V1Volume(**volume))
+
+    spec["containers"] = containers
+    spec["volumes"] = volumes
+
+    if "restart_policy" not in spec_schema:
+        spec["restart_policy"] = restart_policy
+
     pod_template = V1PodTemplateSpec(
-        metadata=V1ObjectMeta(name=name, labels=labels),
-        spec=V1PodSpec(
-            restart_policy=restartPolicy,
-            containers=containers,
-            volumes=volumes,
-            **kwargs,
-        ),
+        metadata=V1ObjectMeta(name=name, labels=labels), spec=V1PodSpec(**spec)
     )
+
     return pod_template
 
 
