@@ -94,12 +94,6 @@ def test_failing_task_clean_resources(
     mocked_clean_job_resources.assert_called_once()
 
 
-def test_init_kubernetes():
-    task = DummyTask()
-    task._init_kubernetes()
-    assert type(task.kubernetes_client) is BatchV1Api
-
-
 def test_name_not_implemented():
     task = KubernetesJobTask()
 
