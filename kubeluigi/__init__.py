@@ -60,7 +60,7 @@ class KubernetesJobTask:
         """
         return {}
 
-    def spec_schema(self) -> V1PodSpec:
+    def spec_schema(self):
         """
         Kubernetes Job spec schema in JSON format, an example follows.
         .. code-block:: javascript
