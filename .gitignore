@@ -1,3 +1,9 @@
 .mypy_cache/
 .cache
 __pycache__
+venv
+build
+dist
+.vscode
+.eggs
+kubeluigi.egg-info/
