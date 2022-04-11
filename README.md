@@ -82,6 +82,39 @@ class Task(KubernetesJobTask):
 
 ```
 
+### Volumes
+
+You can use volumes in the pods that run your tasks:
+
+Simple Ephemeral volume example:
+
+```python
+with_ephemeral_volume200 = EphemeralVolume(size_in_gb=200)
+class MyTask:
+  def __init__(self...):
+    ...
+    # you can find this volume in your containers under `/mnt/data/`
+    self.volumes =  [with_ephemeral_volume200]
+```
+
+By leveraging volumes with cloud storage you can read and write data as if it existed locally. For example by mounting CSI drives your tasks can read inputs and write outputs to `/mnt/my_s3_bucket/`, this avoids complicated setups in which tasks have to know cloud specifics to read inputs and outputs
+
+We provide a base class for Azure blob storage, this pressuposes you installed azure blob CSI driver in your AKS cluster.
+
+```python
+with_azure_blob_volume = AzureBlobStorageVolume(storage_account=AZ_STORAGE_ACCOUNT,
+                                                storage_container=AZ_CONTAINER)
+class MyTask:
+  def __init__(self...):
+    ...
+    # you can find this volume in your containers under `/mnt/{AZ_STORAGE_ACCOUNT}/{AZ_CONTAINER}`
+    # you can use this convention to have your containers inputs and outputs params
+    # read data from this mount point
+    self.volumes =  [with_azure_blob_volume]
+                                                
+```
+
+
 ## Logs
 
 Kubeluigi's task logs include Job, Task, and Pod identifiers: 

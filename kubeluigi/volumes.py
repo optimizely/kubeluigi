@@ -86,7 +86,7 @@ class EphemeralVolume(AttachableVolume):
         }
 
 
-class BlobStorageVolume(AttachableVolume):
+class AzureBlobStorageVolume(AttachableVolume):
     """
     Returns a volume which mounts an azure storage container.
     it assumes that the needed secret to access the underlying
