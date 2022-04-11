@@ -1,4 +1,4 @@
-from kubeluigi.volumes import BlobStorageVolume, EphemeralVolume
+from kubeluigi.volumes import AzureBlobStorageVolume, EphemeralVolume
 from test.test_kubernetes_job_task import DummyTask
 from kubeluigi.k8s import attach_volume_to_spec
 
@@ -8,7 +8,7 @@ def test_volumes():
     t = DummyTask()
 
     # testing attaching volumes
-    v = BlobStorageVolume("my_account", "my_storage")
+    v = AzureBlobStorageVolume("my_account", "my_storage")
     t.add_volume(v)
     assert t.volumes == [v]
     # augmenting pod spec
@@ -42,10 +42,10 @@ def test_ephemeral_volumes():
 
 
 def test_blob_storage_volumes():
-    v = BlobStorageVolume("my_account", "my_container")
+    v = AzureBlobStorageVolume("my_account", "my_container")
     assert v.secret_name() == "storage-sas-my_account"
 
-    v2 = BlobStorageVolume("my_account", "my_container")
+    v2 = AzureBlobStorageVolume("my_account", "my_container")
     assert v.volume_hash() == v2.volume_hash()
 
     vol_spec = v.pod_volume_spec()
@@ -62,7 +62,7 @@ def test_blob_storage_volumes():
 
 def test_attach_volume_to_spec():
     dummy_spec = {"containers": [{"volume_mounts": []}], "volumes": []}
-    v = BlobStorageVolume("my_account", "my_container")
+    v = AzureBlobStorageVolume("my_account", "my_container")
     updated_spec = attach_volume_to_spec(dummy_spec, v)
     assert len(updated_spec["volumes"]) == 1
     assert len(updated_spec["containers"][0]["volume_mounts"]) == 1
