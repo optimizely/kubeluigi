@@ -91,10 +91,11 @@ class KubernetesJobTask:
         )
         return job
 
-    def onpodstarted(self, pod):
-        logger.info(
-            f"Tail the Pod logs using: kubectl logs -f -n {pod.namespace} {pod.name}"
-        )
+    def onpodstarted(self, pods):
+        for pod in pods:
+            logger.info(
+                f"Tail the Pod logs using: kubectl logs -f -n {pod.namespace} {pod.name}"
+            )
 
     def as_yaml(self):
         job = self.build_job_definition()
@@ -116,9 +117,9 @@ class KubernetesJobTask:
         except Exception:
             logger.exception(f"Luigi has failed to run: {job}, starting cleaning")
             raise
-        finally:
+        else:
             clean_job_resources(self.kubernetes_client, job)
-
+       
     def output(self):
         """
         An output target is necessary for checking job completion unless
