@@ -111,8 +111,12 @@ class KubernetesJobTask:
             run_and_track_job(self.kubernetes_client, job, self.onpodstarted)
         except FailedJob as e:
             logger.exception(
-                f"Luigi's job has failed running: {e.job.metadata.name}, {e.pod.status.message}"
+                f"Luigi's job has failed running: {e.job.metadata.name}"
             )
+            for pod in e.pods:
+                logger.exception(
+                    f"Luigi's job has failed running: {pod.status.message}"
+                )
             raise
         except Exception:
             logger.exception(f"Luigi has failed to run: {job}, starting cleaning")
