@@ -160,46 +160,52 @@ def get_job_pods(job) -> List[V1Pod]:
     ).items
 
 
+def reduce_job_state(pods: List[V1Pod]):
+    pod_states = []
+    error_message = "Unknown Reason of Failure"
+    job_state = "Mixed"
+
+    for pod in pods:
+
+        pod_state = pod.status.phase
+
+        # Boil down all container states into one pod state.
+        for status in pod.status.container_statuses:
+            if status.state.waiting and status.state.waiting.reason == "InvalidImageName":
+                pod_state = "Failed"
+                error_message = "Invalid Image"
+
+            if status.state.terminated and status.state.terminated.reason == 'Error':
+                pod_state = "Failed"
+
+        pod_states.append(pod_state)
+
+    # Boil down all pod states into one job state.
+
+    # If all states are the same, set that as the job state
+    if len(set(pod_states)) == 1:
+        job_state = pod_states[0]
+
+    # If one is Failed, then the job is Failed
+    if "Failed" in pod_states:
+        job_state = "Failed"
+
+    return job_state, error_message
+
+
 def job_phase_stream(job):
     previous_job_state = None
-    error_message = "Unknown Reason of Failure"
 
     while True:
-        
+
         sleep(DEFAULT_POLL_INTERVAL)
         pods = get_job_pods(job)
-        
-        pod_states = []
-        
-        for pod in pods:
-            
-            pod_state = pod.status.phase
-            
-            # Boil down all container states into one pod state.
-            for status in pod.status.container_statuses:
-                if status.state.waiting and status.state.waiting.reason == "InvalidImageName":
-                    pod_state = "Failed"
-                    error_message = "Invalid Image"
-
-                if status.state.terminated and status.state.terminated.reason == 'Error':
-                    pod_state = "Failed"
-
-            pod_states.append(pod_state)
-
-        # Boil down all pod states into one job state.
-
-        # If all states are the same, set that as the job state
-        if len(set(pod_states)) == 1:
-            job_state = pod_states[0]
-
-        # If one is Failed, then the job is Failed
-        if "Failed" in pod_states:
-            job_state = "Failed"
+        job_state, error_message = reduce_job_state(pods)
 
         # Only yield job state changes
         if job_state != previous_job_state:
             yield job_state, pods, error_message
-        
+
         # Update state tracker
         previous_job_state = job_state
 

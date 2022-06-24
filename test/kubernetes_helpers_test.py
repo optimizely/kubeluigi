@@ -10,6 +10,7 @@ from kubeluigi.k8s import (
     get_container_with_volume_mounts,
     attach_volume_to_spec,
     job_phase_stream,
+    reduce_job_state
 )
 
 from kubernetes.client import V1Pod, V1PodCondition
@@ -199,3 +200,27 @@ def test_kick_off_job():
     client.create_namespaced_job.assert_called_with(
         body=job, namespace=job.metadata.namespace
     )
+
+
+@patch("kubeluigi.k8s.get_job_pods")
+def test_reduce_job_state(mocked_get_job_pods):
+    labels = {"l1": "label1"}
+
+    pod1 = pod_spec_from_dict("name_of_pod", dummy_pod_spec, labels=labels)
+    pod1.status = MagicMock()
+    pod1.status.phase = "Running"
+
+    pod2 = pod_spec_from_dict("name_of_pod", dummy_pod_spec, labels=labels)
+    pod2.status = MagicMock()
+    pod2.status.phase = "Failed"
+
+    job_state, error_message = reduce_job_state([pod1, pod2])
+    assert job_state == "Failed"
+
+    pod2.status.phase = "Pending"
+    job_state, error_message = reduce_job_state([pod1, pod2])
+    assert job_state == "Mixed"
+
+    pod2.status.phase = "Running"
+    job_state, error_message = reduce_job_state([pod1, pod2])
+    assert job_state == "Running"
