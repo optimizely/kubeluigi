@@ -63,37 +63,6 @@ def test_job_definition_as_yaml():
     assert yaml_as_dict["spec"]["template"]["spec"]["volumes"] == []
 
 
-@patch("kubeluigi.run_and_track_job")
-@patch("kubeluigi.clean_job_resources")
-@patch.object(KubernetesJobTask, "build_job_definition")
-@patch.object(KubernetesJobTask, "_init_kubernetes")
-def test_failing_task_clean_resources(
-    mocked_init_kubernetes,
-    mocked_build_job_definition,
-    mocked_clean_job_resources,
-    mocked_run_and_track_job,
-):
-    """
-    testing k8s resources are cleaned when running job fails.
-    """
-    task = DummyTask()
-    task._init_task_metadata()
-    task.kubernetes_client = MagicMock()
-    task._KubernetesJobTask__logger = MagicMock()
-
-    class DummyException(Exception):
-        pass
-
-    e = DummyException()
-    mocked_run_and_track_job.side_effect = e
-    with pytest.raises(DummyException):
-        task.run()
-
-    mocked_build_job_definition.assert_called_once()
-    mocked_clean_job_resources.assert_called_once()
-    mocked_clean_job_resources.assert_called_once()
-
-
 def test_name_not_implemented():
     task = KubernetesJobTask()
 
