@@ -143,15 +143,15 @@ def test_job_phase_stream(mocked_get_job_pods):
     pod.status = MagicMock()
     pod.status.phase = "Running"
     mocked_get_job_pods.return_value = [pod]
-    phase, pod_with_changed_state = next(job_phase_stream(job))
+    phase, pods_with_changed_state, error_message = next(job_phase_stream(job))
     assert phase == "Running"
-    assert pod.metadata.name == pod_with_changed_state.metadata.name
+    assert pod.metadata.name == pods_with_changed_state[0].metadata.name
 
     pod.status.phase = "Succeeded"
     mocked_get_job_pods.return_value = [pod]
-    phase, pod_with_changed_state = next(job_phase_stream(job))
+    phase, pods_with_changed_state, error_message = next(job_phase_stream(job))
     assert phase == "Succeeded"
-    assert pod.metadata.name == pod_with_changed_state.metadata.name
+    assert pod.metadata.name == pods_with_changed_state[0].metadata.name
 
 
 @patch("kubeluigi.k8s.get_job_pods")
