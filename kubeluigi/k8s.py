@@ -29,9 +29,9 @@ DEFAULT_POLL_INTERVAL = 15
 
 
 class FailedJob(Exception):
-    def __init__(self, job, pod, message):
+    def __init__(self, job, pods, message):
         self.job = job
-        self.pod = pod
+        self.pods = pods
         self.message = message
         super().__init__(self.message)
 
@@ -160,15 +160,54 @@ def get_job_pods(job) -> List[V1Pod]:
     ).items
 
 
+def reduce_job_state(pods: List[V1Pod]):
+    pod_states = []
+    error_message = "Unknown Reason of Failure"
+    job_state = "Mixed"
+
+    for pod in pods:
+
+        pod_state = pod.status.phase
+
+        # Boil down all container states into one pod state.
+        for status in pod.status.container_statuses:
+            if status.state.waiting and status.state.waiting.reason == "InvalidImageName":
+                pod_state = "Failed"
+                error_message = "Invalid Image"
+
+            if status.state.terminated and status.state.terminated.reason == 'Error':
+                pod_state = "Failed"
+
+        pod_states.append(pod_state)
+
+    # Boil down all pod states into one job state.
+
+    # If all states are the same, set that as the job state
+    if len(set(pod_states)) == 1:
+        job_state = pod_states[0]
+
+    # If one is Failed, then the job is Failed
+    if "Failed" in pod_states:
+        job_state = "Failed"
+
+    return job_state, error_message
+
+
 def job_phase_stream(job):
-    previous_phase = {}
+    previous_job_state = None
+
     while True:
+
         sleep(DEFAULT_POLL_INTERVAL)
         pods = get_job_pods(job)
-        for pod in pods:
-            if previous_phase.get(pod.metadata.name, None) != pod.status.phase:
-                yield pod.status.phase, pod
-            previous_phase[pod.metadata.name] = pod.status.phase
+        job_state, error_message = reduce_job_state(pods)
+
+        # Only yield job state changes
+        if job_state != previous_job_state:
+            yield job_state, pods, error_message
+
+        # Update state tracker
+        previous_job_state = job_state
 
 
 def are_all_pods_successful(job):
@@ -184,18 +223,18 @@ def run_and_track_job(
     """
     logger.debug(f"Submitting job: {job.metadata.name}")
     job = kick_off_job(k8s_client, job)
-    for phase, pod in job_phase_stream(job):
-        logger.debug(f"Task {job.metadata.name} state is {phase}")
+    for state, pods, error_message in job_phase_stream(job):
+        logger.debug(f"Task {job.metadata.name} state is {state}")
 
         # ToDo: Check if we handle : Scale up but not enough resources
         # Warning: Running onpodstarted is not guaranteed to execute all times..
-        if phase == "Running":
-            onpodstarted(pod)
+        if state == "Running":
+            onpodstarted(pods)
 
-        if phase == "Failed":
-            raise FailedJob(job, pod, "Failed pod in Job")
+        if state == "Failed":
+            raise FailedJob(job, pods, error_message)
 
-        if phase == "Succeeded" and are_all_pods_successful(job):
+        if state == "Succeeded" and are_all_pods_successful(job):
             return
 
 
