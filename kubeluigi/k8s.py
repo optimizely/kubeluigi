@@ -44,9 +44,7 @@ def kubernetes_client() -> BatchV1Api:
     return BatchV1Api()
 
 
-def pod_spec_from_dict(
-    name, spec_schema, labels={}, restart_policy="Never", **kwargs
-) -> V1PodTemplateSpec:
+def pod_spec_from_dict(name, spec_schema, labels={}, restart_policy="Never", **kwargs) -> V1PodTemplateSpec:
     """
     returns a pod template spec from a dictionary describing a pod
     """
@@ -76,9 +74,7 @@ def pod_spec_from_dict(
     if "restart_policy" not in spec_schema:
         spec["restart_policy"] = restart_policy
 
-    pod_template = V1PodTemplateSpec(
-        metadata=V1ObjectMeta(name=name, labels=labels), spec=V1PodSpec(**spec)
-    )
+    pod_template = V1PodTemplateSpec(metadata=V1ObjectMeta(name=name, labels=labels), spec=V1PodSpec(**spec))
 
     return pod_template
 
@@ -99,11 +95,7 @@ def get_container_with_volume_mounts(container):
 
 
 def job_definition(
-    job_name: str,
-    backoff_limit: int,
-    pod_template_spec: V1PodTemplateSpec,
-    labels: Dict[str, str],
-    namespace: str,
+    job_name: str, backoff_limit: int, pod_template_spec: V1PodTemplateSpec, labels: Dict[str, str], namespace: str,
 ) -> V1Job:
     """
     returns a job object describing a k8s job.
@@ -122,17 +114,11 @@ def job_definition(
 
 def kick_off_job(k8s_client: ApiClient, job: V1Job) -> V1Job:
     try:
-        job = k8s_client.create_namespaced_job(
-            body=job, namespace=job.metadata.namespace
-        )
+        job = k8s_client.create_namespaced_job(body=job, namespace=job.metadata.namespace)
     except ApiException as e:
         if e.reason == "Conflict":
-            logger.warning(
-                "The job you tried to start is already running. We will try to track it."
-            )
-            job = k8s_client.read_namespaced_job(
-                job.metadata.name, job.metadata.namespace
-            )
+            logger.warning("The job you tried to start is already running. We will try to track it.")
+            job = k8s_client.read_namespaced_job(job.metadata.name, job.metadata.namespace)
         else:
             raise e
 
@@ -155,9 +141,7 @@ def get_job_pods(job) -> List[V1Pod]:
     """
     core_v1 = CoreV1Api()
     label_selector = "job-name=" + job.metadata.name
-    return core_v1.list_namespaced_pod(
-        job.metadata.namespace, label_selector=label_selector
-    ).items
+    return core_v1.list_namespaced_pod(job.metadata.namespace, label_selector=label_selector).items
 
 
 def reduce_job_state(pods: List[V1Pod]):
@@ -169,14 +153,17 @@ def reduce_job_state(pods: List[V1Pod]):
 
         pod_state = pod.status.phase
 
-        # Boil down all container states into one pod state.
-        for status in pod.status.container_statuses:
-            if status.state.waiting and status.state.waiting.reason == "InvalidImageName":
-                pod_state = "Failed"
-                error_message = "Invalid Image"
+        try:
+            # Boil down all container states into one pod state.
+            for status in pod.status.container_statuses:
+                if status.state.waiting and status.state.waiting.reason == "InvalidImageName":
+                    pod_state = "Failed"
+                    error_message = "Invalid Image"
 
-            if status.state.terminated and status.state.terminated.reason == 'Error':
-                pod_state = "Failed"
+                if status.state.terminated and status.state.terminated.reason == "Error":
+                    pod_state = "Failed"
+        except TypeError:
+            pod_state = pod.status.phase
 
         pod_states.append(pod_state)
 
@@ -185,6 +172,14 @@ def reduce_job_state(pods: List[V1Pod]):
     # If all states are the same, set that as the job state
     if len(set(pod_states)) == 1:
         job_state = pod_states[0]
+
+    if len(set(pod_states)) > 1:
+        job_state = ",".join(pod_states)
+
+    if len(pod_states) == 0:
+        job_state = "Failed"
+
+    print(pod_states)
 
     # If one is Failed, then the job is Failed
     if "Failed" in pod_states:
@@ -195,11 +190,13 @@ def reduce_job_state(pods: List[V1Pod]):
 
 def job_phase_stream(job):
     previous_job_state = None
+    job_state = None
 
     while True:
 
         sleep(DEFAULT_POLL_INTERVAL)
         pods = get_job_pods(job)
+        # print(pods)
         job_state, error_message = reduce_job_state(pods)
 
         # Only yield job state changes
@@ -215,9 +212,7 @@ def are_all_pods_successful(job):
     return all([pod.status.phase == "Succeeded" for pod in pods])
 
 
-def run_and_track_job(
-    k8s_client: ApiClient, job: V1Job, onpodstarted: Callable = lambda x: None
-) -> None:
+def run_and_track_job(k8s_client: ApiClient, job: V1Job, onpodstarted: Callable = lambda x: None) -> None:
     """
     Tracks the execution of a job by following its state changes.
     """
@@ -251,9 +246,7 @@ def clean_job_resources(k8s_client: ApiClient, job: V1Job) -> None:
     )
     # fix this error handling
     if api_response.status != "Success":
-        logger.warning(
-            f"Error while cleaning job: {job.metadata.name} : {api_response}"
-        )
+        logger.warning(f"Error while cleaning job: {job.metadata.name} : {api_response}")
         raise Exception(f"error cleaning job: {job.metadata.name} : {api_response}")
     logger.info(f"JOB: {job.metadata.name} -  Finished cleaning Job's resources")
 
