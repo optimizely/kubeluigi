@@ -179,8 +179,6 @@ def reduce_job_state(pods: List[V1Pod]):
     if len(pod_states) == 0:
         job_state = "Failed"
 
-    print(pod_states)
-
     # If one is Failed, then the job is Failed
     if "Failed" in pod_states:
         job_state = "Failed"

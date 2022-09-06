@@ -219,7 +219,7 @@ def test_reduce_job_state(mocked_get_job_pods):
 
     pod2.status.phase = "Pending"
     job_state, error_message = reduce_job_state([pod1, pod2])
-    assert job_state == "Mixed"
+    assert job_state == "Running,Pending"
 
     pod2.status.phase = "Running"
     job_state, error_message = reduce_job_state([pod1, pod2])
