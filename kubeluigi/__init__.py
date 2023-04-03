@@ -25,10 +25,10 @@ logger = logging.getLogger(__name__)
 class KubernetesJobTask:
 
     volumes: List[AttachableVolume] = []
-    tolerations: List[V1Toleration] = []
 
     def _init_task_metadata(self):
         self.uu_name = self.name
+        self._tolerations: List[V1Toleration] = []
 
     def _init_kubernetes(self):
         self.kubernetes_client = kubernetes_client()
@@ -81,7 +81,7 @@ class KubernetesJobTask:
         schema = self.spec_schema()
         schema_with_volumes = self._attach_volumes_to_spec(schema)
         pod_template_spec = pod_spec_from_dict(
-            self.uu_name, schema_with_volumes, self.labels, self.restart_policy, tolerations=self.tolerations
+            self.uu_name, schema_with_volumes, self.labels, self.restart_policy, tolerations=self._tolerations
         )
 
         job = job_definition(
@@ -152,4 +152,4 @@ class KubernetesJobTask:
 
     def add_toleration(self, key, value, effect='NoSchedule', operator='Equals'):
         toleration = V1Toleration(key=key, value=value, effect=effect, operator=operator)
-        return self.tolerations.append(toleration)
+        return self._tolerations.append(toleration)
