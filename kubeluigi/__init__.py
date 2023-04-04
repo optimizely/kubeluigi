@@ -154,4 +154,6 @@ class KubernetesJobTask:
 
     def add_toleration(self, key, value, effect='NoSchedule', operator='Equals'):
         toleration = V1Toleration(key=key, value=value, effect=effect, operator=operator)
+
         return self.tolerations.append(toleration)
+
