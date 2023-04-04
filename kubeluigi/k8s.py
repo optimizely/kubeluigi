@@ -76,6 +76,8 @@ def pod_spec_from_dict(
     if "restart_policy" not in spec_schema:
         spec["restart_policy"] = restart_policy
 
+    spec.update(kwargs)
+
     pod_template = V1PodTemplateSpec(
         metadata=V1ObjectMeta(name=name, labels=labels), spec=V1PodSpec(**spec)
     )
