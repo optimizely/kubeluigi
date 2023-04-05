@@ -152,7 +152,7 @@ class KubernetesJobTask:
         """
         return self.volumes.append(volume)
 
-    def add_toleration(self, key, value, effect='NoSchedule', operator='Equals'):
+    def add_toleration(self, key, value, effect='NoSchedule', operator='Equal'):
         toleration = V1Toleration(key=key, value=value, effect=effect, operator=operator)
 
         return self.tolerations.append(toleration)
