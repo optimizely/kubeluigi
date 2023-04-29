@@ -1,12 +1,7 @@
 import yaml
-
-
-from mock import patch, MagicMock
 import pytest
 
 from kubeluigi import KubernetesJobTask
-
-from kubernetes.client import BatchV1Api
 
 
 class DummyTask(KubernetesJobTask):
