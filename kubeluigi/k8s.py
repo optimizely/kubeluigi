@@ -134,6 +134,17 @@ def kick_off_job(k8s_client: ApiClient, job: V1Job) -> V1Job:
             job = k8s_client.read_namespaced_job(
                 job.metadata.name, job.metadata.namespace
             )
+            # TODO: improve design of this
+            # Problem: of a job failed, it's currently tracked and keeps
+            # the Luigi task failing. This is a quick patch to avoid that.
+            if not job.status.active:
+                condition = job.status.conditions[0]
+                if condition.type == "Failed" and condition.reason == "BackoffLimitExceeded":
+                    logger.warning(
+                        "The job you tried to start was in BackoffLimitExceeded state, deleting it"
+                    )
+                    clean_job_resources(k8s_client, job)
+                    raise RuntimeError("Found orphan failed job with the same spec, deleted it.")
         else:
             raise e
 

@@ -25,9 +25,7 @@ logger = logging.getLogger(__name__)
 class KubernetesJobTask:
 
     volumes: List[AttachableVolume] = []
-
-    def __init__(self):
-        self.tolerations: List[V1Toleration] = []
+    tolerations: List[V1Toleration] = []
 
     def _init_task_metadata(self):
         self.uu_name = self.name
