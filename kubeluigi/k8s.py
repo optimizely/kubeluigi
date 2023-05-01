@@ -91,10 +91,11 @@ def get_container_with_volume_mounts(container):
     """
     volumes_spec = container["volume_mounts"]
     mount_volumes = []
+    keys_to_omit = {"host_path"}
     for volume in volumes_spec:
-        mount_path = volume["mountPath"]
-        name = volume["name"]
-        mount_volumes.append(V1VolumeMount(mount_path=mount_path, name=name))
+        # we need things like read_only, sub_path, etc:
+        volume_std_spec = {k: v for k, v in volume.items() if k not in keys_to_omit}
+        mount_volumes.append(V1VolumeMount(**volume_std_spec))
     container["volume_mounts"] = mount_volumes
     return container
 
