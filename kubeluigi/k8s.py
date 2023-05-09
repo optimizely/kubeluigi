@@ -57,7 +57,6 @@ def pod_spec_from_dict(
     spec = dict(spec_schema)
 
     for container in spec_schema["containers"]:
-
         if "imagePullPolicy" in container:
             container["image_pull_policy"] = container.pop("imagePullPolicy")
 
@@ -168,17 +167,23 @@ def reduce_job_state(pods: List[V1Pod]):
     job_state = "Mixed"
 
     for pod in pods:
-
         pod_state = pod.status.phase
 
         # Boil down all container states into one pod state.
-        for status in pod.status.container_statuses:
-            if status.state.waiting and status.state.waiting.reason == "InvalidImageName":
-                pod_state = "Failed"
-                error_message = "Invalid Image"
+        if pod.status.container_statuses is not None:
+            for status in pod.status.container_statuses:
+                if (
+                    status.state.waiting
+                    and status.state.waiting.reason == "InvalidImageName"
+                ):
+                    pod_state = "Failed"
+                    error_message = "Invalid Image"
 
-            if status.state.terminated and status.state.terminated.reason == 'Error':
-                pod_state = "Failed"
+                if (
+                    status.state.terminated
+                    and status.state.terminated.reason == "Error"
+                ):
+                    pod_state = "Failed"
 
         pod_states.append(pod_state)
 
@@ -199,7 +204,6 @@ def job_phase_stream(job):
     previous_job_state = None
 
     while True:
-
         sleep(DEFAULT_POLL_INTERVAL)
         pods = get_job_pods(job)
         job_state, error_message = reduce_job_state(pods)
