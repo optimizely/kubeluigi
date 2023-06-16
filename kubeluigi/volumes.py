@@ -93,11 +93,13 @@ class AzureBlobStorageVolume(AttachableVolume):
     azure storage account is available on k8s.
     """
 
-    def __init__(self, storage_account, storage_container):
+    def __init__(self, storage_account, storage_container,
+                 mount_options="-o allow_other --file-cache-timeout-in-seconds=120"):
         super().__init__()
         self.storage_account = storage_account
         self.storage_container = storage_container
         self.mount_location = f"/mnt/{storage_account}/{self.storage_container}"
+        self.mount_options = mount_options
 
     def secret_name(self):
         """
@@ -118,7 +120,7 @@ class AzureBlobStorageVolume(AttachableVolume):
                         "volumeAttributes": {
                             "containerName": self.storage_container,
                             "secretName": self.secret_name(),
-                            "mountOptions": "-o allow_other --file-cache-timeout-in-seconds=120",
+                            "mountOptions": self.mount_options,
                         },
                     },
                 }
