@@ -40,6 +40,6 @@ setup(
     license="Apache License 2.0",
     packages=find_packages(exclude=["tests"]),
     cmdclass={"test": PyTest},
-    install_requires=["kubernetes>=17.17.0", "luigi", "PyYaml==5.4.1"],
+    install_requires=["kubernetes>=17.17.0", "luigi", "PyYaml"],
     entry_points={},
 )
