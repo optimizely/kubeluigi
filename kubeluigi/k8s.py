@@ -32,7 +32,7 @@ class FailedJob(Exception):
     def __init__(self, job, pods, message):
         self.job = job
         self.pods = pods
-        self.message = message
+        self.message = job.metadata.name + ": " + message
         super().__init__(self.message)
 
 
