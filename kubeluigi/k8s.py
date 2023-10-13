@@ -105,6 +105,7 @@ def job_definition(
     pod_template_spec: V1PodTemplateSpec,
     labels: Dict[str, str],
     namespace: str,
+    active_deadline_seconds=None
 ) -> V1Job:
     """
     returns a job object describing a k8s job.
@@ -115,7 +116,7 @@ def job_definition(
         api_version="batch/v1",
         kind="Job",
         metadata=V1ObjectMeta(name=job_name, labels=labels, namespace=namespace),
-        spec=V1JobSpec(template=pod_template_spec, backoff_limit=backoff_limit),
+        spec=V1JobSpec(template=pod_template_spec, backoff_limit=backoff_limit, active_deadline_seconds=active_deadline_seconds),
     )
 
     return job
