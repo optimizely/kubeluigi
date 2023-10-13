@@ -40,6 +40,10 @@ class KubernetesJobTask:
         return "Never"
 
     @property
+    def active_deadline_seconds(self):
+        return None
+
+    @property
     def backoff_limit(self):
         """
         Maximum number of retries before considering the job as failed.
@@ -92,6 +96,7 @@ class KubernetesJobTask:
             pod_template_spec=pod_template_spec,
             labels=self.labels,
             namespace=self.namespace,
+            active_deadline_seconds=self.active_deadline_seconds
         )
         return job
 
