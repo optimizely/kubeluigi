@@ -56,7 +56,7 @@ dummy_pod_spec_with_volume = {
             "imagePullPolicy": "Always",
             "env": [{"name": "my_env", "value": "env"}],
             "volume_mounts": [
-                {"name": "Vname", "mountPath": "VmountPath", "host_path": "VhostPath"}
+                {"name": "Vname", "mount_path": "VmountPath", "host_path": "VhostPath"}
             ],
         }
     ],
@@ -105,7 +105,7 @@ dummy_container = {
     "imagePullPolicy": "Always",
     "env": [{"name": "my_env", "value": "env"}],
     "volume_mounts": [
-        {"name": "Vname", "mountPath": "VmountPath", "host_path": "VhostPath"}
+        {"name": "Vname", "mount_path": "VmountPath", "host_path": "VhostPath"}
     ],
 }
 

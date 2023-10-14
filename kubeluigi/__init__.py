@@ -25,9 +25,7 @@ logger = logging.getLogger(__name__)
 class KubernetesJobTask:
 
     volumes: List[AttachableVolume] = []
-
-    def __init__(self):
-        self.tolerations: List[V1Toleration] = []
+    tolerations: List[V1Toleration] = []
 
     def _init_task_metadata(self):
         self.uu_name = self.name
@@ -103,7 +101,7 @@ class KubernetesJobTask:
     def onpodstarted(self, pods):
         for pod in pods:
             logger.info(
-                f"Tail the Pod logs using: kubectl logs -f -n {pod.namespace} {pod.name}"
+                f"Tail the Pod logs using: kubectl logs -f -n {pod.metadata.namespace} {pod.metadata.name}"
             )
 
     def as_yaml(self):

@@ -32,7 +32,7 @@ class FailedJob(Exception):
     def __init__(self, job, pods, message):
         self.job = job
         self.pods = pods
-        self.message = message
+        self.message = job.metadata.name + ": " + message
         super().__init__(self.message)
 
 
@@ -91,10 +91,11 @@ def get_container_with_volume_mounts(container):
     """
     volumes_spec = container["volume_mounts"]
     mount_volumes = []
+    keys_to_omit = {"host_path"}
     for volume in volumes_spec:
-        mount_path = volume["mountPath"]
-        name = volume["name"]
-        mount_volumes.append(V1VolumeMount(mount_path=mount_path, name=name))
+        # we need things like read_only, sub_path, etc:
+        volume_std_spec = {k: v for k, v in volume.items() if k not in keys_to_omit}
+        mount_volumes.append(V1VolumeMount(**volume_std_spec))
     container["volume_mounts"] = mount_volumes
     return container
 
@@ -135,6 +136,17 @@ def kick_off_job(k8s_client: ApiClient, job: V1Job) -> V1Job:
             job = k8s_client.read_namespaced_job(
                 job.metadata.name, job.metadata.namespace
             )
+            # TODO: improve design of this
+            # Problem: of a job failed, it's currently tracked and keeps
+            # the Luigi task failing. This is a quick patch to avoid that.
+            if not job.status.active:
+                condition = job.status.conditions[0]
+                if condition.type == "Failed" and condition.reason == "BackoffLimitExceeded":
+                    logger.warning(
+                        "The job you tried to start was in BackoffLimitExceeded state, deleting it"
+                    )
+                    clean_job_resources(k8s_client, job)
+                    raise RuntimeError("Found orphan failed job with the same spec, deleted it.")
         else:
             raise e
 
