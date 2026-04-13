@@ -15,7 +15,7 @@ class PyTest(TestCommand):
         sys.exit(pytest.main(self.test_args))
 
 
-version = "1.0.5"
+version = "1.0.9"
 
 setup(
     name="kubeluigi",
@@ -26,8 +26,7 @@ setup(
     long_description_content_type="text/markdown",
     classifiers=[
         "Development Status :: 4 - Beta",
-        "Programming Language :: Python :: 3.7",
-        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.12",
         "Programming Language :: Python",
         "Intended Audience :: Developers",
         "License :: OSI Approved :: Apache Software License",
@@ -40,6 +39,6 @@ setup(
     license="Apache License 2.0",
     packages=find_packages(exclude=["tests"]),
     cmdclass={"test": PyTest},
-    install_requires=["kubernetes>=17.17.0", "luigi", "PyYaml==5.4.1"],
+    install_requires=["kubernetes>=17.17.0", "luigi", "PyYaml>=6.0.1"],
     entry_points={},
 )
